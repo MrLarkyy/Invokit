@@ -1,5 +1,5 @@
 {
-  "name": "fakturka",
+  "name": "invokit",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.11.2",

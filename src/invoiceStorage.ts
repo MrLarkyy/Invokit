@@ -1,7 +1,7 @@
 import type { Invoice } from './invoice';
 
 // Everything stays in this browser: the draft is the only thing stored and nothing is ever sent anywhere.
-const KEY = 'fakturka.draft.v1';
+const KEY = 'invokit.draft.v1';
 
 export function loadDraft(): Invoice | null {
   try {

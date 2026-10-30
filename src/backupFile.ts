@@ -7,7 +7,7 @@ export function downloadBackup(data: AppData, today: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `fakturka-zaloha-${today}.json`;
+  link.download = `invokit-zaloha-${today}.json`;
   link.click();
   URL.revokeObjectURL(url);
 }

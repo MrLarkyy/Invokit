@@ -1,4 +1,4 @@
-# Fakturka
+# Invokit
 
 Jednoduchý generátor faktur zdarma, který běží celý ve vašem prohlížeči. Nic, co vyplníte, neopouští váš počítač:
 faktury, odběratelé i položky se ukládají jen do `localStorage` tohoto prohlížeče. Smazáním dat prohlížeče zmizí, proto

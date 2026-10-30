@@ -7,11 +7,11 @@ describe('parseAppData', () => {
     expect(parseAppData(JSON.stringify(emptyAppData()))).toEqual(emptyAppData());
   });
 
-  it('rejects files that are not a Fakturka backup', () => {
+  it('rejects files that are not a Invokit backup', () => {
     expect(() => parseAppData('not json')).toThrow('Soubor není platný JSON.');
     expect(() => parseAppData('{"version":2,"customers":[],"items":[],"invoices":[]}')).toThrow(
-      'Soubor není záloha Fakturky.',
+      'Soubor není záloha Invokitu.',
     );
-    expect(() => parseAppData('[]')).toThrow('Soubor není záloha Fakturky.');
+    expect(() => parseAppData('[]')).toThrow('Soubor není záloha Invokitu.');
   });
 });

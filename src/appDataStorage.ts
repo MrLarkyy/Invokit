@@ -1,7 +1,7 @@
 import { type AppData, emptyAppData } from './appData';
 
 // Everything stays in this browser; the JSON backup is the way to move it or keep it safe.
-const KEY = 'fakturka.data.v1';
+const KEY = 'invokit.data.v1';
 
 export function loadAppData(): AppData {
   try {
@@ -22,7 +22,7 @@ export function saveAppData(data: AppData): void {
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
-/** Parses a backup or stored data; throws a Czech message when it is not Fakturka data. */
+/** Parses a backup or stored data; throws a Czech message when it is not Invokit data. */
 export function parseAppData(text: string): AppData {
   let value: unknown;
   try {
@@ -37,7 +37,7 @@ export function parseAppData(text: string): AppData {
     !Array.isArray(value.items) ||
     !Array.isArray(value.invoices)
   ) {
-    throw new Error('Soubor není záloha Fakturky.');
+    throw new Error('Soubor není záloha Invokitu.');
   }
   return value as unknown as AppData;
 }

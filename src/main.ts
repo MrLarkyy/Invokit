@@ -41,7 +41,7 @@ function setData(next: AppData): void {
 
 function refreshPreview(): void {
   preview.replaceChildren(renderInvoice(invoice));
-  document.title = `Faktura ${invoice.number} – Fakturka`;
+  document.title = `Faktura ${invoice.number} – Invokit`;
 }
 
 function onChange(): void {
