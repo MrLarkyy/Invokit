@@ -1,6 +1,7 @@
 import type { AppData, SavedInvoice } from './appData';
 import type { Invoice, InvoiceItem, Party } from './invoice';
 import { filledItems } from './invoiceTotal';
+import { profileOf } from './supplierProfile';
 
 const norm = (text: string) => text.trim().toLowerCase();
 
@@ -45,6 +46,7 @@ export function saveInvoice(data: AppData, invoice: Invoice, now: string): AppDa
     invoices,
     customers: upsertCustomer(data.customers, invoice.customer),
     items: upsertItems(data.items, invoice.items),
+    supplier: profileOf(structuredClone(invoice)),
   };
 }
 

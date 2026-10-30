@@ -1,4 +1,5 @@
 import type { Invoice, InvoiceItem, Party } from './invoice';
+import type { SupplierProfile } from './supplierProfile';
 
 export interface SavedInvoice extends Invoice {
   savedAt: string;
@@ -10,6 +11,8 @@ export interface AppData {
   customers: Party[];
   items: InvoiceItem[];
   invoices: SavedInvoice[];
+  /** Absent in backups made before the profile was remembered. */
+  supplier?: SupplierProfile;
 }
 
 export function emptyAppData(): AppData {

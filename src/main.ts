@@ -13,6 +13,7 @@ import { loadDraft, saveDraft } from './invoiceStorage';
 import { newInvoice } from './newInvoice';
 import { latestNumber, saveInvoice, sameParty, toDraft } from './records';
 import { renderStats } from './statsView';
+import { prefillSupplier, savedProfile } from './supplierProfile';
 
 type Tab = 'invoice' | 'history' | 'customers' | 'stats';
 
@@ -25,6 +26,7 @@ const status = document.querySelector<HTMLElement>('#status')!;
 const today = () => toIsoDate(new Date());
 let data: AppData = loadAppData();
 let invoice: Invoice = loadDraft() ?? newInvoice(null);
+prefillSupplier(invoice, savedProfile(data));
 let tab: Tab = 'invoice';
 
 function flash(message: string): void {
@@ -57,6 +59,7 @@ function mountEditor(): void {
 function startInvoice(customer: Party | null): void {
   const previous = { ...invoice, number: latestNumber(data, invoice.number) };
   invoice = newInvoice(previous, today());
+  prefillSupplier(invoice, savedProfile(data));
   if (customer) {
     invoice.customer = { ...customer };
     invoice.items = [{ quantity: '1', unit: 'ks', description: '', unitPrice: '' }];
@@ -136,8 +139,10 @@ importInput.addEventListener('change', () => {
       const summary = `${czechPlural(backup.invoices.length, INVOICES)}, ${czechPlural(backup.customers.length, CUSTOMERS)}`;
       if (!confirm(`Nahradit současná data zálohou (${summary})?`)) return;
       setData(backup);
+      // The editor is rendered even when hidden, so the prefilled supplier is there on the next visit to the tab.
+      prefillSupplier(invoice, savedProfile(data));
       show(tab);
-      if (tab === 'invoice') mountEditor();
+      mountEditor();
       flash(`Obnoveno ${summary}.`);
     })
     .catch((error: unknown) => flash(error instanceof Error ? error.message : 'Zálohu nelze načíst.'));
