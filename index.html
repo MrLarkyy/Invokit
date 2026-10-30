@@ -16,15 +16,30 @@
   <body>
     <header class="toolbar">
       <strong class="brand">Fakturka</strong>
-      <span class="hint">Data zůstávají jen ve vašem prohlížeči.</span>
+      <nav class="tabs">
+        <button type="button" data-tab="invoice">Faktura</button>
+        <button type="button" data-tab="history">Historie</button>
+        <button type="button" data-tab="customers">Odběratelé</button>
+        <button type="button" data-tab="stats">Statistiky</button>
+      </nav>
+      <span id="status" class="hint" role="status"></span>
       <span class="spacer"></span>
-      <button id="new" type="button">Nová faktura</button>
-      <button id="print" type="button" class="primary">Tisk / uložit PDF</button>
+      <span class="invoice-actions">
+        <button id="new" type="button">Nová faktura</button>
+        <button id="save" type="button">Uložit</button>
+        <button id="print" type="button" class="primary">Tisk / PDF</button>
+      </span>
+      <span class="backup" title="Data jsou jen v tomto prohlížeči. Zálohu si uložte do souboru.">
+        <button id="export" type="button">Záloha</button>
+        <button id="import" type="button">Obnovit</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+      </span>
     </header>
-    <main class="layout">
+    <main id="invoice-view" class="layout">
       <aside id="editor"></aside>
       <section id="preview" aria-label="Náhled faktury"></section>
     </main>
+    <main id="other-view" class="other" hidden></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -2,6 +2,7 @@ import { czechAccountToIban } from './czechIban';
 import { formatCzechDate } from './dates';
 import { h } from './dom';
 import type { Invoice, Party } from './invoice';
+import { filledItems, invoiceTotalCents } from './invoiceTotal';
 import { formatCzk, lineTotalCents } from './money';
 import { qrSvg } from './qrSvg';
 import { buildSpayd } from './spayd';
@@ -31,8 +32,8 @@ function row(label: string, value: string): HTMLElement[] {
 }
 
 export function renderInvoice(invoice: Invoice): HTMLElement {
-  const lines = invoice.items.filter((item) => item.description.trim() || item.unitPrice.trim());
-  const totalCents = lines.reduce((sum, item) => sum + lineTotalCents(item.quantity, item.unitPrice), 0);
+  const lines = filledItems(invoice);
+  const totalCents = invoiceTotalCents(invoice);
   const iban = czechAccountToIban(invoice.bankAccount);
 
   const items = h(
