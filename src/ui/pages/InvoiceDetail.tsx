@@ -45,7 +45,8 @@ export function InvoiceDetail({ id }: { id: string }) {
   };
 
   const remove = () => {
-    if (!window.confirm(`Smazat fakturu ${invoice.number}? Smaže se jen z tohoto prohlížeče a nejde to vrátit.`)) return;
+    if (!window.confirm(`Smazat fakturu ${invoice.number}? Smaže se jen z tohoto prohlížeče a nejde to vrátit.`))
+      return;
     dispatch({ type: 'invoice/delete', id: invoice.id });
     toast(`Faktura ${invoice.number} je smazaná.`);
     navigate({ name: 'faktury' });

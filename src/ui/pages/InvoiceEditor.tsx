@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { isValidDic } from '../../czech/dic';
 import { isValidIco } from '../../czech/ico';
 import { addDays, diffDays, formatCzechDate } from '../../domain/dates';
-import { VAT_RATES, type CatalogItem, type Invoice, type InvoiceItem, type Party, type VatRate } from '../../domain/invoice';
+import {
+  VAT_RATES,
+  type CatalogItem,
+  type Invoice,
+  type InvoiceItem,
+  type Party,
+  type VatRate,
+} from '../../domain/invoice';
 import { uniqueInvoiceId, variableSymbolFor } from '../../domain/invoiceNumber';
 import { computeTotals, itemTotalCents } from '../../domain/invoiceTotals';
 import { invoiceProblem } from '../../domain/invoiceValidation';
@@ -238,7 +245,12 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
           </p>
         </div>
         <div className="page__actions">
-          <button type="button" className="btn btn--outline" onClick={downloadPdf} title="Otevře tisk, kde zvolíš Uložit jako PDF.">
+          <button
+            type="button"
+            className="btn btn--outline"
+            onClick={downloadPdf}
+            title="Otevře tisk, kde zvolíš Uložit jako PDF."
+          >
             <IconDownload size={18} />
             Stáhnout PDF
           </button>

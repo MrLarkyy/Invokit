@@ -11,7 +11,9 @@ describe('invoiceProblem', () => {
     const noCustomer = fixtureInvoice();
     noCustomer.customer = { ...noCustomer.customer, name: ' ' };
     expect(invoiceProblem(noCustomer)).toBe('Doplň název odběratele.');
-    expect(invoiceProblem(fixtureInvoice({ items: [item('', '1', 100)] }))).toBe('Přidej aspoň jednu položku s popisem.');
+    expect(invoiceProblem(fixtureInvoice({ items: [item('', '1', 100)] }))).toBe(
+      'Přidej aspoň jednu položku s popisem.',
+    );
   });
 
   it('checks the number, variable symbol and dates', () => {

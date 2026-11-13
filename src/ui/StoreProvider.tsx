@@ -1,4 +1,13 @@
-import { createContext, useContext, useEffect, useReducer, useRef, useState, type Dispatch, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+} from 'react';
 import type { AppData } from '../storage/appData';
 import { parseAppData } from '../storage/appDataSchema';
 import { DATA_KEY, loadAppData, saveAppData } from '../storage/appDataStorage';
@@ -45,7 +54,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  return <StoreContext.Provider value={{ data, dispatch, recovered: initial.recovered }}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={{ data, dispatch, recovered: initial.recovered }}>{children}</StoreContext.Provider>
+  );
 }
 
 export function useStore(): Store {

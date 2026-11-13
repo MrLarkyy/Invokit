@@ -159,7 +159,10 @@ textarea {
   text-decoration: none;
   text-align: center;
   cursor: pointer;
-  transition: background-color 0.12s, border-color 0.12s, transform 0.12s;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    transform 0.12s;
 }
 
 .btn:active {
@@ -2123,7 +2126,6 @@ select.input {
   .account .field:last-child {
     grid-column: 1 / -1;
   }
-
 }
 
 /* Malý mobil. */

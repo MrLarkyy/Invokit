@@ -23,7 +23,8 @@ export function StatsPanel({ invoices, today }: { invoices: Invoice[]; today: st
         Statistiky
       </h2>
       <p className="stats-panel__year">
-        Rok {today.slice(0, 4)}: <strong>{formatCzkRound(stats.yearCents)}</strong>, {czechPlural(stats.yearCount, INVOICES)}
+        Rok {today.slice(0, 4)}: <strong>{formatCzkRound(stats.yearCents)}</strong>,{' '}
+        {czechPlural(stats.yearCount, INVOICES)}
       </p>
       <ol className="stats-panel__months" aria-label="Fakturováno za posledních 12 měsíců">
         {stats.months.map((m) => (

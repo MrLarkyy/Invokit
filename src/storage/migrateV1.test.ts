@@ -132,7 +132,9 @@ describe('migrateV1', () => {
   });
 
   it('turns a v1 backup file into valid v2 data', () => {
-    const file = JSON.stringify(dataV1([invoiceV1('2026-09-001', [{ quantity: '1', unit: 'ks', description: 'A', unitPrice: '1' }])]));
+    const file = JSON.stringify(
+      dataV1([invoiceV1('2026-09-001', [{ quantity: '1', unit: 'ks', description: 'A', unitPrice: '1' }])]),
+    );
     const data = parseAppData(file);
     expect(data.version).toBe(2);
     expect(data.invoices[0]?.number).toBe('2026-09-001');

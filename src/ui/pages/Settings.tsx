@@ -59,7 +59,10 @@ export function Settings() {
   const patchParty = (changes: Partial<Party>) =>
     setForm((current) => ({ ...current, party: { ...current.party, ...changes } }));
   const dirty = JSON.stringify(form) !== JSON.stringify(data.supplier ?? saved);
-  const banks = form.bankCode && !BANKS.some(([code]) => code === form.bankCode) ? [...BANKS, [form.bankCode, 'jiná banka'] as [string, string]] : BANKS;
+  const banks =
+    form.bankCode && !BANKS.some(([code]) => code === form.bankCode)
+      ? [...BANKS, [form.bankCode, 'jiná banka'] as [string, string]]
+      : BANKS;
 
   const save = () => {
     dispatch({ type: 'supplier/save', supplier: form });
@@ -140,7 +143,9 @@ export function Settings() {
               <Field
                 label="IČO"
                 htmlFor="s-ico"
-                hint={form.party.ico && !isValidIco(form.party.ico) ? 'IČO neprošlo kontrolou, zkontroluj ho.' : undefined}
+                hint={
+                  form.party.ico && !isValidIco(form.party.ico) ? 'IČO neprošlo kontrolou, zkontroluj ho.' : undefined
+                }
               >
                 <input
                   id="s-ico"

@@ -26,7 +26,8 @@ export function invoiceProblem(invoice: Invoice): string | null {
   if (!/^\d{0,10}$/.test(invoice.variableSymbol)) return 'Variabilní symbol může mít jen číslice, nejvýš 10.';
   if (!isIsoDate(invoice.issueDate)) return 'Zadej platné datum vystavení.';
   if (!isIsoDate(invoice.dueDate)) return 'Zadej platné datum splatnosti.';
-  if (invoice.supplier.vatPayer && !isIsoDate(invoice.taxableSupplyDate)) return 'Zadej platné datum zdanitelného plnění.';
+  if (invoice.supplier.vatPayer && !isIsoDate(invoice.taxableSupplyDate))
+    return 'Zadej platné datum zdanitelného plnění.';
   if (partyTooLong(invoice.customer)) return `Údaje odběratele mohou mít nejvýš ${LIMITS.text} znaků.`;
   if (invoice.note.length > LIMITS.note) return `Poznámka může mít nejvýš ${LIMITS.note} znaků.`;
   const index = items.findIndex((item) => item.description.length > LIMITS.text || item.unit.length > LIMITS.text);
