@@ -98,6 +98,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeLegacy = useCallback(() => {
     if (!removeLegacyData(storage) || !saveAppData(storage, current.current.data)) return false;
+    const settled = settleAppStore(current.current, 'saved');
+    current.current = settled;
+    setStore(settled);
     setLegacyBlocking(false);
     return true;
   }, [storage]);

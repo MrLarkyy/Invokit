@@ -111,6 +111,8 @@ describe('app store', () => {
     expect(settleAppStore(failed, 'unchanged')).toBe(failed);
     expect(settleAppStore(failed, 'saved').lastWriteFailed).toBe(false);
     expect(settleAppStore(opened, 'saved')).toBe(opened);
+    // removeLegacy settles a successful save this way, so the settings stop saying nothing is stored.
+    expect(settleAppStore(settleAppStore(opened, 'failed'), 'saved')).toEqual(opened);
   });
 
   it('keeps saving off for every other action', () => {
