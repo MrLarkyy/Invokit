@@ -335,6 +335,48 @@ describe('the move from the previous key', () => {
   });
 });
 
+describe('two tabs of this version on version 2 data', () => {
+  it('move it once: the second tab takes over what the first stored and writes to the data key only', () => {
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2 }, new WatchedStorage()) as WatchedStorage;
+    const first = open(storage);
+    const second = open(storage);
+    storage.written.length = 0;
+    const moved = changeAppStore(storage, first, saveLogo).store;
+
+    const followed = synced(storage, second);
+    expect(followed).toEqual({ ...moved, dataReplaced: true });
+    const later = changeAppStore(storage, followed, saveInvoice);
+    expect(later.written).toBe('saved');
+    expect(later.store.data.logos).toEqual(moved.data.logos);
+    expect(snapshot(storage)).toEqual({ [DATA_KEY]: text(later.store.data) });
+    expect(new Set(storage.written)).toEqual(new Set([DATA_KEY]));
+  });
+
+  it('move it once also when the second tab changes something before any event reached it', () => {
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2 });
+    const first = open(storage);
+    const second = open(storage);
+    const moved = changeAppStore(storage, first, saveLogo).store;
+    const { store, written } = changeAppStore(storage, second, saveInvoice);
+    expect(written).toBe('saved');
+    expect(store.data.logos).toEqual(moved.data.logos);
+    expect(store.data.invoices.map((i) => i.id).sort()).toEqual(['2026-09-001', 'other-1']);
+    expect(snapshot(storage)).toEqual({ [DATA_KEY]: text(store.data) });
+    expect(synced(storage, moved)).toEqual({ ...store, dataReplaced: true });
+  });
+
+  it('take the version 2 text seen for a moment next to the stored version 3 for an older tab’s only until it is gone', () => {
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2 });
+    const second = open(storage);
+    // The first tab has stored version 3 and is about to remove the version 2 text.
+    storage.setItem(DATA_KEY, text(OLD));
+    const between = synced(storage, second);
+    expect(between).toMatchObject({ data: OLD, olderTab: 'aside', previousText: null, storedText: text(OLD) });
+    storage.removeItem(PREVIOUS_DATA_KEY);
+    expect(synced(storage, between)).toEqual({ ...between, olderTab: null });
+  });
+});
+
 describe('an older Invoo saving in another tab', () => {
   it('is followed while nothing is under the data key: its saves are taken over and nothing is written', () => {
     const storage = holding({ [PREVIOUS_DATA_KEY]: V2 });
