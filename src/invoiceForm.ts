@@ -1,5 +1,5 @@
 import { h } from './dom';
-import type { Invoice, InvoiceItem, Party } from './invoice';
+import type { Invoice, InvoiceItem, Party } from './domain/invoice';
 
 export interface SavedChoices {
   customers: Party[];

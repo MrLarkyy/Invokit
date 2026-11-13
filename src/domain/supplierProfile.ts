@@ -1,4 +1,4 @@
-import type { AppData } from './appData';
+import type { AppData } from '../storage/appData';
 import type { Invoice, Party } from './invoice';
 
 /** The user's own details that repeat on every invoice. */

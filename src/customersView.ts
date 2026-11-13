@@ -1,5 +1,5 @@
 import { h } from './dom';
-import type { Party } from './invoice';
+import type { Party } from './domain/invoice';
 
 export interface CustomerActions {
   invoiceFor: (customer: Party) => void;

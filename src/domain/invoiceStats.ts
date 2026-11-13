@@ -1,5 +1,5 @@
-import type { SavedInvoice } from './appData';
-import { invoiceTotalCents } from './invoiceTotal';
+import type { SavedInvoice } from '../storage/appData';
+import { invoiceTotalCents } from './invoiceTotals';
 
 export interface MonthTotal {
   month: string; // "2026-09"

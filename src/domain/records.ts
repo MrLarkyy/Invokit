@@ -1,6 +1,6 @@
-import type { AppData, SavedInvoice } from './appData';
+import type { AppData, SavedInvoice } from '../storage/appData';
 import type { Invoice, InvoiceItem, Party } from './invoice';
-import { filledItems } from './invoiceTotal';
+import { filledItems } from './invoiceTotals';
 import { profileOf } from './supplierProfile';
 
 const norm = (text: string) => text.trim().toLowerCase();

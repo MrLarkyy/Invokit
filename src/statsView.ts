@@ -1,8 +1,8 @@
-import type { SavedInvoice } from './appData';
-import { czechPlural, INVOICES } from './czechPlural';
+import type { SavedInvoice } from './storage/appData';
+import { czechPlural, INVOICES } from './ui/czechPlural';
 import { h } from './dom';
-import { invoiceStats } from './invoiceStats';
-import { formatCzk } from './money';
+import { invoiceStats } from './domain/invoiceStats';
+import { formatCzk } from './domain/money';
 
 const MONTHS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
 

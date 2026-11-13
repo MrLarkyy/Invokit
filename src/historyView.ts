@@ -1,8 +1,8 @@
-import type { SavedInvoice } from './appData';
-import { formatCzechDate } from './dates';
+import type { SavedInvoice } from './storage/appData';
+import { formatCzechDate } from './domain/dates';
 import { h } from './dom';
-import { invoiceTotalCents } from './invoiceTotal';
-import { formatCzk } from './money';
+import { invoiceTotalCents } from './domain/invoiceTotals';
+import { formatCzk } from './domain/money';
 
 export interface HistoryActions {
   open: (invoice: SavedInvoice) => void;

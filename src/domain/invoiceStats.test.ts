@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SavedInvoice } from './appData';
+import type { SavedInvoice } from '../storage/appData';
 import { invoiceStats } from './invoiceStats';
 
 function saved(issueDate: string, dueDate: string, price: string, paid: boolean, customer: string): SavedInvoice {

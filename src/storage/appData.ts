@@ -1,5 +1,5 @@
-import type { Invoice, InvoiceItem, Party } from './invoice';
-import type { SupplierProfile } from './supplierProfile';
+import type { Invoice, InvoiceItem, Party } from '../domain/invoice';
+import type { SupplierProfile } from '../domain/supplierProfile';
 
 export interface SavedInvoice extends Invoice {
   savedAt: string;

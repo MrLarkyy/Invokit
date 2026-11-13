@@ -1,11 +1,11 @@
-import { czechAccountToIban } from './czechIban';
-import { formatCzechDate } from './dates';
+import { czechAccountToIban } from './czech/czechIban';
+import { formatCzechDate } from './domain/dates';
 import { h } from './dom';
-import type { Invoice, Party } from './invoice';
-import { filledItems, invoiceTotalCents } from './invoiceTotal';
-import { formatCzk, lineTotalCents } from './money';
+import type { Invoice, Party } from './domain/invoice';
+import { filledItems, invoiceTotalCents } from './domain/invoiceTotals';
+import { formatCzk, lineTotalCents } from './domain/money';
 import { qrSvg } from './qrSvg';
-import { buildSpayd } from './spayd';
+import { buildSpayd } from './czech/spayd';
 
 function partyBlock(title: string, party: Party, extra: string | null): HTMLElement {
   return h(

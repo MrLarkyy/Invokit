@@ -1,19 +1,19 @@
 import './style.css';
-import type { AppData } from './appData';
-import { loadAppData, saveAppData } from './appDataStorage';
-import { downloadBackup, readBackup } from './backupFile';
+import type { AppData } from './storage/appData';
+import { loadAppData, saveAppData } from './storage/appDataStorage';
+import { downloadBackup, readBackup } from './storage/backupFile';
 import { renderCustomers } from './customersView';
-import { CUSTOMERS, czechPlural, INVOICES } from './czechPlural';
-import { toIsoDate } from './dates';
+import { CUSTOMERS, czechPlural, INVOICES } from './ui/czechPlural';
+import { toIsoDate } from './domain/dates';
 import { renderHistory } from './historyView';
-import type { Invoice, Party } from './invoice';
+import type { Invoice, Party } from './domain/invoice';
 import { renderForm } from './invoiceForm';
 import { renderInvoice } from './invoicePreview';
-import { loadDraft, saveDraft } from './invoiceStorage';
-import { newInvoice } from './newInvoice';
-import { latestNumber, saveInvoice, sameParty, toDraft } from './records';
+import { loadDraft, saveDraft } from './storage/invoiceStorage';
+import { newInvoice } from './domain/newInvoice';
+import { latestNumber, saveInvoice, sameParty, toDraft } from './domain/records';
 import { renderStats } from './statsView';
-import { prefillSupplier, savedProfile } from './supplierProfile';
+import { prefillSupplier, savedProfile } from './domain/supplierProfile';
 
 type Tab = 'invoice' | 'history' | 'customers' | 'stats';
 

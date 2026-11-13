@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyAppData } from './appData';
+import { emptyAppData } from '../storage/appData';
 import type { Invoice } from './invoice';
 import { latestNumber, saveInvoice } from './records';
 

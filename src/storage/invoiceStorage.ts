@@ -1,4 +1,4 @@
-import type { Invoice } from './invoice';
+import type { Invoice } from '../domain/invoice';
 
 // Everything stays in this browser: the draft is the only thing stored and nothing is ever sent anywhere.
 const KEY = 'invokit.draft.v1';
