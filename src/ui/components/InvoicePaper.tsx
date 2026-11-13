@@ -140,76 +140,79 @@ export function InvoicePaper({ invoice, logo }: InvoicePaperProps) {
           </tbody>
         </table>
 
-        <section className="paper__totals">
-          {payer ? (
-            <table className="paper__vat">
-              <thead>
-                <tr>
-                  <th>Sazba DPH</th>
-                  <th className="num">Základ</th>
-                  <th className="num">DPH</th>
-                </tr>
-              </thead>
-              <tbody>
-                {totals.rates.map((rate) => (
-                  <tr key={rate.rate}>
-                    <td>{rate.rate} %</td>
-                    <td className="num">{formatCzk(rate.baseCents)}</td>
-                    <td className="num">{formatCzk(rate.vatCents)}</td>
+        {/* Totals, payment and footer stay together when a long invoice continues on another page. */}
+        <div className="paper__end">
+          <section className="paper__totals">
+            {payer ? (
+              <table className="paper__vat">
+                <thead>
+                  <tr>
+                    <th>Sazba DPH</th>
+                    <th className="num">Základ</th>
+                    <th className="num">DPH</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th>Celkem</th>
-                  <td className="num">{formatCzk(totals.baseCents)}</td>
-                  <td className="num">{formatCzk(totals.vatCents)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          ) : null}
-          <div className="paper__sum">
-            <span>Celkem k úhradě</span>
-            <strong>{formatCzk(totals.totalCents)}</strong>
-          </div>
-        </section>
-
-        <section className="paper__pay">
-          {payment.request ? (
-            <div className="paper__qr">
-              <QrCode text={buildSpayd(payment.request)} />
-              <div>
-                <strong>QR platba</strong>
-                <span>Naskenuj v aplikaci své banky.</span>
-                <span className="paper__iban">IBAN {formatIban(payment.request.iban)}</span>
-                {invoice.paymentMethod ? <span>Způsob úhrady: {invoice.paymentMethod}</span> : null}
-              </div>
+                </thead>
+                <tbody>
+                  {totals.rates.map((rate) => (
+                    <tr key={rate.rate}>
+                      <td>{rate.rate} %</td>
+                      <td className="num">{formatCzk(rate.baseCents)}</td>
+                      <td className="num">{formatCzk(rate.vatCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th>Celkem</th>
+                    <td className="num">{formatCzk(totals.baseCents)}</td>
+                    <td className="num">{formatCzk(totals.vatCents)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            ) : null}
+            <div className="paper__sum">
+              <span>Celkem k úhradě</span>
+              <strong>{formatCzk(totals.totalCents)}</strong>
             </div>
-          ) : (
-            <div className="paper__qr paper__qr--off">
-              <div>
-                <strong>{invoice.paymentMethod || 'Platba převodem'}</strong>
-                <span>
-                  Účet {supplier.bankAccount || <Placeholder text="…" />}, variabilní symbol{' '}
-                  {invoice.variableSymbol || <Placeholder text="…" />}
-                </span>
-                {iban ? <span className="paper__iban">IBAN {formatIban(iban)}</span> : null}
-                {payment.problem ? <span className="paper__qr-why">{payment.problem}</span> : null}
-              </div>
-            </div>
-          )}
-          {invoice.note ? <p className="paper__note">{invoice.note}</p> : null}
-        </section>
+          </section>
 
-        <footer className="paper__foot">
-          <span>{supplier.registryNote}</span>
-          {invoice.appearance.brandFooter ? (
-            <span className="paper__brand">
-              {eyes ? <Eyes size={9} variant="outline" mood="watch" /> : null}
-              Vystaveno v Invoo · invoo.cz
-            </span>
-          ) : null}
-        </footer>
+          <section className="paper__pay">
+            {payment.request ? (
+              <div className="paper__qr">
+                <QrCode text={buildSpayd(payment.request)} />
+                <div>
+                  <strong>QR platba</strong>
+                  <span>Naskenuj v aplikaci své banky.</span>
+                  <span className="paper__iban">IBAN {formatIban(payment.request.iban)}</span>
+                  {invoice.paymentMethod ? <span>Způsob úhrady: {invoice.paymentMethod}</span> : null}
+                </div>
+              </div>
+            ) : (
+              <div className="paper__qr paper__qr--off">
+                <div>
+                  <strong>{invoice.paymentMethod || 'Platba převodem'}</strong>
+                  <span>
+                    Účet {supplier.bankAccount || <Placeholder text="…" />}, variabilní symbol{' '}
+                    {invoice.variableSymbol || <Placeholder text="…" />}
+                  </span>
+                  {iban ? <span className="paper__iban">IBAN {formatIban(iban)}</span> : null}
+                  {payment.problem ? <span className="paper__qr-why">{payment.problem}</span> : null}
+                </div>
+              </div>
+            )}
+            {invoice.note ? <p className="paper__note">{invoice.note}</p> : null}
+          </section>
+
+          <footer className="paper__foot">
+            <span>{supplier.registryNote}</span>
+            {invoice.appearance.brandFooter ? (
+              <span className="paper__brand">
+                {eyes ? <Eyes size={9} variant="outline" mood="watch" /> : null}
+                Vystaveno v Invoo · invoo.cz
+              </span>
+            ) : null}
+          </footer>
+        </div>
 
         {invoice.paid ? (
           <div className="paper__stamp">

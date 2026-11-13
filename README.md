@@ -13,7 +13,9 @@ nemá server, nic, co vyplníš, neodchází z tvého zařízení, a nenačítá
 - QR Platba (SPD 1.0): IBAN se dopočítá z čísla účtu a ověří (modulo 11 a 97); bez platného účtu QR nevznikne a
   faktura řekne proč
 - číslování `RRRR-MM-NNN` navazuje na předchozí faktury, variabilní symbol se doplní z čísla
-- živý náhled, tisk a uložení do PDF přes tisk prohlížeče (běžná faktura se vejde na jednu stranu A4)
+- živý náhled, tisk a uložení do PDF přes tisk prohlížeče: běžná faktura (třeba 15 položek a kratší poznámka) se
+  vejde na jednu stranu A4 v každém vzhledu; velmi dlouhá poznámka nebo hodně položek pokračuje na druhé straně, řádky
+  položek se nikdy nepřetrhnou a součty, rozpis DPH, QR platba a patička zůstanou pohromadě
 - tři vzhledy tištěné faktury: **Invoo** (barevný pruh se součtem), **Klasik** (černobílý, s linkami) a **Minimal**
   (hodně bílého místa); výchozí se vybírá v nastavení s náhledem, u každé faktury jde v editoru změnit
 - volitelná barva zvýraznění (barví jen plochy, text na nich zůstává čitelný; Klasik se tiskne černobíle), volitelné

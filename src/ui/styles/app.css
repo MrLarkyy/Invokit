@@ -1452,8 +1452,18 @@ select.input {
   line-height: 1.45;
 }
 
-.paper > * {
+.paper > *,
+.paper__end > * {
   font-size: 1.3em;
+}
+
+/* Only a wrapper: its sections are sized and spaced like the paper's own, the footer still sits at the bottom. */
+.paper > .paper__end {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: inherit;
+  font-size: 1em;
 }
 
 .paper__head {
@@ -2566,14 +2576,52 @@ select.input {
     display: none !important;
   }
 
+  /* Every template: 15 items, a 600-character note, a logo and the footer fit one page at any usual margin. */
   .paper {
-    gap: 1em;
+    gap: 0.8em;
     padding: 0;
     font-size: 2.4mm;
   }
 
+  .paper__title {
+    font-size: 2.6em;
+  }
+
+  .paper__parties,
+  .paper__items td,
+  .paper__vat th,
+  .paper__vat td {
+    line-height: 1.3;
+  }
+
   .paper__items td {
-    padding: 0.2em 0;
+    padding: 0.12em 0;
+  }
+
+  .paper__vat th,
+  .paper__vat td {
+    padding: 0.1em 0;
+  }
+
+  .paper__meta {
+    padding: 0.7em 1em;
+  }
+
+  .paper__sum {
+    padding: 0.6em 1.2em;
+  }
+
+  .paper__pay {
+    gap: 0.8em;
+  }
+
+  .paper__note {
+    font-size: 0.9em;
+    line-height: 1.35;
+  }
+
+  .paper__foot {
+    padding-top: 0.8em;
   }
 
   /* A printed page is as narrow as a phone: drop the room the mobile layout keeps for the tab bar. */
@@ -2587,8 +2635,10 @@ select.input {
     height: 10.5em;
   }
 
-  /* Dlouhá faktura se láme mezi řádky, nikdy uprostřed řádku, součtů nebo QR. */
+  /* Dlouhá faktura se láme mezi řádky položek, nikdy uprostřed řádku. Součty, rozpis DPH, QR, poznámka a patička
+     zůstanou pohromadě; jen když jsou samy delší než strana, lámou se mezi sebou. */
   .paper__items tr,
+  .paper__end,
   .paper__totals,
   .paper__pay,
   .paper__foot {
