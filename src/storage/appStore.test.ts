@@ -4,6 +4,7 @@ import { emptyAppData } from './appData';
 import { BROKEN_DATA_KEY, DATA_KEY, loadAppData } from './appDataStorage';
 import {
   appStoreReducer,
+  followOtherTab,
   openAppStore,
   settleAppStore,
   writeAppStore,
@@ -84,13 +85,20 @@ describe('app store', () => {
   });
 
   it('resumes saving when another tab replaced the unreadable data', () => {
-    const blocked: AppStore = { data: emptyAppData(), canWrite: false, dataReplaced: false, lastWriteFailed: false };
+    const blocked: AppStore = {
+      data: emptyAppData(),
+      canWrite: false,
+      dataReplaced: false,
+      lastWriteFailed: false,
+      olderTab: false,
+    };
     const fromOtherTab = { ...emptyAppData(), supplier: fixtureProfile() };
     expect(appStoreReducer(blocked, { type: 'data/reload', data: fromOtherTab })).toEqual({
       data: fromOtherTab,
       canWrite: true,
       dataReplaced: true,
       lastWriteFailed: false,
+      olderTab: false,
     });
   });
 
@@ -116,7 +124,13 @@ describe('app store', () => {
   });
 
   it('keeps saving off for every other action', () => {
-    let store: AppStore = { data: emptyAppData(), canWrite: false, dataReplaced: false, lastWriteFailed: false };
+    let store: AppStore = {
+      data: emptyAppData(),
+      canWrite: false,
+      dataReplaced: false,
+      lastWriteFailed: false,
+      olderTab: false,
+    };
     const others: AppStoreAction[] = [
       saveInvoice,
       { type: 'invoice/setPaid', id: '2026-09-001', paidAt: '2026-09-10' },
@@ -150,5 +164,61 @@ describe('app store', () => {
     expect(apply(storage, store, { type: 'saving/resume' })).toEqual({ store, written: 'unchanged' });
     const sameNumber: AppStoreAction = { ...saveInvoice, invoice: fixtureInvoice({ id: 'other' }) };
     expect(apply(storage, store, sameNumber)).toEqual({ store, written: 'unchanged' });
+  });
+});
+
+describe('followOtherTab', () => {
+  const opened = (storage: Storage) => {
+    const store = apply(storage, openAppStore(loadAppData(storage)), saveInvoice).store;
+    expect(store.data.invoices).toHaveLength(1);
+    return store;
+  };
+
+  it('takes over current data another tab wrote, without writing it back', () => {
+    const storage = new MemoryStorage();
+    const store = opened(storage);
+    const other = JSON.stringify({ ...emptyAppData(), supplier: fixtureProfile() });
+    storage.setItem(DATA_KEY, other);
+    const next = followOtherTab(storage, store, other);
+    expect(next).toMatchObject({ dataReplaced: true, olderTab: false });
+    expect(next.data.supplier?.party.name).toBe('Ukázka s.r.o.');
+    expect(storage.getItem(DATA_KEY)).toBe(other);
+  });
+
+  it('never takes over data an older Invoo wrote: writes its own back and notes the older tab', () => {
+    const storage = new MemoryStorage();
+    const store = opened(storage);
+    const older = JSON.stringify({
+      version: 2,
+      supplier: null,
+      invoices: [],
+      customers: [],
+      items: [],
+      lastBackupAt: null,
+    });
+    storage.setItem(DATA_KEY, older);
+    const next = followOtherTab(storage, store, older);
+    expect(next.data).toBe(store.data);
+    expect(next).toMatchObject({ olderTab: true, dataReplaced: false, lastWriteFailed: false });
+    expect(loadAppData(storage).data).toEqual(store.data);
+    expect(followOtherTab(storage, next, older).olderTab).toBe(true);
+  });
+
+  it('notes a refused write-back, and writes nothing while saving is off', () => {
+    const storage = new MemoryStorage();
+    const store = opened(storage);
+    const older = '{"version":2}';
+    storage.failWrites = true;
+    expect(followOtherTab(storage, store, older)).toMatchObject({ olderTab: true, lastWriteFailed: true });
+    storage.failWrites = false;
+    storage.setItem(DATA_KEY, older);
+    expect(followOtherTab(storage, { ...store, canWrite: false }, older).olderTab).toBe(true);
+    expect(storage.getItem(DATA_KEY)).toBe(older);
+  });
+
+  it('ignores unreadable text', () => {
+    const storage = new MemoryStorage();
+    const store = opened(storage);
+    expect(followOtherTab(storage, store, CORRUPT)).toBe(store);
   });
 });

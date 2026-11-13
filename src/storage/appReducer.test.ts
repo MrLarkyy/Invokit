@@ -4,6 +4,7 @@ import { logoUrl } from '../domain/logos';
 import { createBlankInvoice } from '../domain/newInvoice';
 import { FIXTURE_LOGO, fixtureInvoice, fixtureProfile } from '../test/invoiceFixture';
 import { emptyAppData, type AppData } from './appData';
+import { parseAppData } from './appDataSchema';
 import { appReducer } from './appReducer';
 
 const saved = (): AppData =>
@@ -97,5 +98,22 @@ describe('appReducer', () => {
     const restored = { ...emptyAppData(), supplier: fixtureProfile() };
     expect(appReducer(data, { type: 'backup/restore', data: restored })).toBe(restored);
     expect(appReducer(data, { type: 'data/reload', data: restored })).toBe(restored);
+  });
+});
+
+describe('a logo saved next to a restored high id', () => {
+  it('stays loadable after the save', () => {
+    const issued = fixtureInvoice({ appearance: { ...defaultAppearance(), logoId: 'logo-999999999' } });
+    const restored = parseAppData(
+      JSON.stringify({
+        ...emptyAppData(),
+        invoices: [issued],
+        logos: [{ id: 'logo-999999999', dataUrl: FIXTURE_LOGO }],
+      }),
+    );
+    const other = FIXTURE_LOGO.replace('YII=', 'YIA=');
+    const saved = appReducer(restored, { type: 'supplier/save', supplier: fixtureProfile(), logo: other });
+    expect(saved.supplier?.appearance.logoId).toBe('logo-1');
+    expect(parseAppData(JSON.stringify(saved))).toEqual(saved);
   });
 });

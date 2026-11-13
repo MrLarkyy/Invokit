@@ -1,5 +1,5 @@
 import type { AppData } from './appData';
-import { saveAppData, type LoadedAppData } from './appDataStorage';
+import { readStoredChange, saveAppData, type LoadedAppData } from './appDataStorage';
 import { appReducer, type AppAction } from './appReducer';
 
 /** The data of this page visit, and whether its changes go to the browser storage. */
@@ -14,6 +14,8 @@ export interface AppStore {
   dataReplaced: boolean;
   /** The last attempt to store a change was refused by the browser. */
   lastWriteFailed: boolean;
+  /** Another tab still runs an Invoo from before schema version 3 and wrote its older data over this one's. */
+  olderTab: boolean;
 }
 
 /** `saving/resume`: the user downloaded the unreadable data and agreed to have it replaced. */
@@ -23,7 +25,13 @@ export type AppStoreAction = AppAction | { type: 'saving/resume' };
 export type AppStoreWrite = 'saved' | 'unchanged' | 'off' | 'failed';
 
 export function openAppStore(loaded: Pick<LoadedAppData, 'data' | 'readOnly'>): AppStore {
-  return { data: loaded.data, canWrite: !loaded.readOnly, dataReplaced: false, lastWriteFailed: false };
+  return {
+    data: loaded.data,
+    canWrite: !loaded.readOnly,
+    dataReplaced: false,
+    lastWriteFailed: false,
+    olderTab: false,
+  };
 }
 
 export function appStoreReducer(store: AppStore, action: AppStoreAction): AppStore {
@@ -42,6 +50,20 @@ export function settleAppStore(store: AppStore, written: AppStoreWrite): AppStor
   if (written !== 'saved' && written !== 'failed') return store;
   const lastWriteFailed = written === 'failed';
   return lastWriteFailed === store.lastWriteFailed ? store : { ...store, lastWriteFailed };
+}
+
+/**
+ * Follows a write of another tab to the data key. Current data is taken over without writing it back. Data an older
+ * Invoo wrote is never taken over: it lacks the looks and logos and would drop invoices saved here since, so this
+ * tab writes its own data back and notes the older tab, for a warning. Anything unreadable is ignored.
+ */
+export function followOtherTab(storage: Storage, store: AppStore, text: string): AppStore {
+  const change = readStoredChange(text);
+  if (change.kind === 'current') return appStoreReducer(store, { type: 'data/reload', data: change.data });
+  if (change.kind === 'unreadable') return store;
+  const noted = store.olderTab ? store : { ...store, olderTab: true };
+  if (!noted.canWrite) return noted;
+  return settleAppStore(noted, saveAppData(storage, noted.data) ? 'saved' : 'failed');
 }
 
 /**

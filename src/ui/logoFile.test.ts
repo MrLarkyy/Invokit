@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_LOGO } from '../test/invoiceFixture';
 import { imageSize } from './imageSize';
-import { fitWithin } from './logoFile';
+import { fitWithin, LOGO_ERRORS, readLogoFile } from './logoFile';
 
 const box = { width: 600, height: 240 };
 
@@ -57,5 +57,33 @@ describe('imageSize', () => {
     expect(imageSize(bytes('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBeNull();
     expect(imageSize(bytes('\x89PNG'))).toBeNull();
     expect(imageSize(bytes([0xff, 0xd8, 0x00], pad(40)))).toBeNull();
+  });
+});
+
+describe('readLogoFile refuses before decoding', () => {
+  // Node has no createImageBitmap: each refusal below happens before the file would be decoded or drawn.
+  it('a type other than PNG, JPEG or WebP', async () => {
+    const svg = new File(['<svg xmlns="http://www.w3.org/2000/svg"/>'], 'logo.svg', { type: 'image/svg+xml' });
+    await expect(readLogoFile(svg)).rejects.toThrow(LOGO_ERRORS.type);
+    await expect(readLogoFile(new File(['text'], 'logo.txt', { type: 'text/plain' }))).rejects.toThrow(
+      LOGO_ERRORS.type,
+    );
+    await expect(readLogoFile(new File(['x'], 'logo.png', { type: '' }))).rejects.toThrow(LOGO_ERRORS.type);
+  });
+
+  it('a file over 5 MB', async () => {
+    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'logo.png', { type: 'image/png' });
+    await expect(readLogoFile(big)).rejects.toThrow(LOGO_ERRORS.fileSize);
+  });
+
+  it('a small file declaring more than 40 megapixels', async () => {
+    const header = bytes('\x89PNG\r\n\x1a\n', [0, 0, 0, 13], 'IHDR', [0, 0, 0x4e, 0x20, 0, 0, 0x4e, 0x20], pad(20));
+    const bomb = new File([header], 'logo.png', { type: 'image/png' });
+    await expect(readLogoFile(bomb)).rejects.toThrow(LOGO_ERRORS.pixels);
+  });
+
+  it('a file that cannot be decoded, as unreadable', async () => {
+    const broken = new File([bytes(pad(64))], 'logo.png', { type: 'image/png' });
+    await expect(readLogoFile(broken)).rejects.toThrow(LOGO_ERRORS.unreadable);
   });
 });

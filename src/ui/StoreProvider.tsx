@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Invoice } from '../domain/invoice';
 import type { AppData } from '../storage/appData';
-import { parseAppData } from '../storage/appDataSchema';
 import {
   DATA_KEY,
   hasLegacyData,
@@ -10,7 +9,14 @@ import {
   saveAppData,
   type LoadedAppData,
 } from '../storage/appDataStorage';
-import { appStoreReducer, openAppStore, settleAppStore, writeAppStore, type AppStoreAction } from '../storage/appStore';
+import {
+  appStoreReducer,
+  followOtherTab,
+  openAppStore,
+  settleAppStore,
+  writeAppStore,
+  type AppStoreAction,
+} from '../storage/appStore';
 import { DraftSession } from '../storage/draftSession';
 import { browserStorage } from './browserStorage';
 import { useToast } from './components/Toast';
@@ -35,6 +41,8 @@ interface Store {
   dataReplaced: boolean;
   /** The browser refused the last write. */
   lastWriteFailed: boolean;
+  /** Another tab runs an older Invoo and wrote its data over this one's (which this tab then wrote back). */
+  olderTab: boolean;
   /** How loading went (unreadable data, Invokit data that does not fit). */
   loaded: LoadedAppData;
   /** The Invokit data is the only copy because the new data does not fit into the browser storage. */
@@ -56,7 +64,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState(() => openAppStore(loaded));
   const current = useRef(store);
   const [drafts] = useState(() => new DraftSession(storage));
-  const { canWrite, dataReplaced, lastWriteFailed } = store;
+  const { canWrite, dataReplaced, lastWriteFailed, olderTab } = store;
   const loadDraft = useCallback(() => drafts.load(), [drafts]);
   // A new function once saving resumes, so the open editor writes its draft again.
   const saveDraft = useCallback((draft: Invoice | null) => drafts.save(draft, canWrite), [drafts, canWrite]);
@@ -79,18 +87,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [persistent, storage, toast],
   );
 
-  // Another tab wrote new data: take it over without writing it back.
+  // Another tab wrote the data: current data is taken over, an older Invoo's is overwritten (see followOtherTab).
   useEffect(() => {
     if (!persistent) return;
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea !== storage || event.key !== DATA_KEY || event.newValue === null) return;
-      try {
-        const next = appStoreReducer(current.current, { type: 'data/reload', data: parseAppData(event.newValue) });
-        current.current = next;
-        setStore(next);
-      } catch {
-        // Unreadable data from another tab is ignored; this tab keeps what it has.
-      }
+      const next = followOtherTab(storage, current.current, event.newValue);
+      if (next === current.current) return;
+      current.current = next;
+      setStore(next);
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -116,6 +121,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         canWrite,
         dataReplaced,
         lastWriteFailed,
+        olderTab,
         loaded,
         legacyBlocking,
         removeLegacy,

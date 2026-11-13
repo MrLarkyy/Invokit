@@ -10,6 +10,7 @@ import {
   LEGACY_DRAFT_KEY,
   loadAppData,
   loadDraft,
+  readStoredChange,
   removeLegacyData,
   saveAppData,
   saveDraft,
@@ -190,5 +191,22 @@ describe('openStorage', () => {
     expect(opened.persistent).toBe(false);
     opened.storage.setItem(DATA_KEY, '{}');
     expect(loadAppData(opened.storage).recovered).toBe(true);
+  });
+});
+
+describe('readStoredChange', () => {
+  it('tells current data, data of an older Invoo and unreadable text apart', () => {
+    const v3 = { ...emptyAppData(), invoices: [fixtureInvoice()] };
+    expect(readStoredChange(JSON.stringify(v3))).toEqual({ kind: 'current', data: v3 });
+    const v2 = JSON.parse(JSON.stringify(v3)) as Record<string, unknown> & { invoices: Record<string, unknown>[] };
+    v2.version = 2;
+    delete v2.logos;
+    delete v2.invoices[0]!.appearance;
+    expect(readStoredChange(JSON.stringify(v2))).toEqual({ kind: 'older' });
+    expect(readStoredChange(v1Data)).toEqual({ kind: 'older' });
+    expect(readStoredChange(CORRUPT)).toEqual({ kind: 'unreadable' });
+    expect(readStoredChange('{"version":3,"invoices":"broken"}')).toEqual({ kind: 'unreadable' });
+    expect(readStoredChange(JSON.stringify({ ...v3, version: 4 }))).toEqual({ kind: 'unreadable' });
+    expect(readStoredChange('null')).toEqual({ kind: 'unreadable' });
   });
 });

@@ -1,6 +1,7 @@
 import type { Invoice } from '../domain/invoice';
 import { emptyAppData, type AppData } from './appData';
 import { parseAppData, parseDraft } from './appDataSchema';
+import { isRecord, own } from './untrustedJson';
 import { readInvoiceV1 } from './appDataV1';
 import { migrateDraftV1 } from './migrateV1';
 
@@ -67,9 +68,10 @@ function unreadable(text: string, readOnly: boolean): LoadedAppData {
 }
 
 /**
- * Loads `invoo.data.v2`. Corrupt data is first kept as `invoo.data.v2.broken` (an older copy there is never
- * overwritten); when that is impossible the session writes nothing. Without v2 data, the Invokit data and draft
- * are migrated and written as v2; the old keys are left untouched.
+ * Loads `invoo.data.v2` (which holds schema version 3; older versions are migrated). Corrupt data is first kept as
+ * `invoo.data.v2.broken` (an older copy there is never overwritten); when that is impossible the session writes
+ * nothing. Without data under that key, the Invokit data and draft are migrated and written there in the current
+ * schema; the old keys are left untouched.
  */
 export function loadAppData(storage: Storage): LoadedAppData {
   const raw = read(storage, DATA_KEY);
@@ -101,6 +103,30 @@ export function loadAppData(storage: Storage): LoadedAppData {
   migrateLegacyDraft(storage, data);
   const saved = saveAppData(storage, data);
   return { data, recovered: false, unreadableText: null, readOnly: false, legacyBlocking: legacy !== null && !saved };
+}
+
+/** What another tab wrote under DATA_KEY. */
+export type StoredDataChange =
+  | { kind: 'current'; data: AppData }
+  /** An Invoo from before schema version 3 is still open and wrote its own, older data. */
+  | { kind: 'older' }
+  | { kind: 'unreadable' };
+
+/** Sorts what another tab wrote: current data to take over, data of an older Invoo, or something unreadable. */
+export function readStoredChange(text: string): StoredDataChange {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { kind: 'unreadable' };
+  }
+  const version = isRecord(value) ? own(value, 'version') : undefined;
+  if (version === 1 || version === 2) return { kind: 'older' };
+  try {
+    return version === 3 ? { kind: 'current', data: parseAppData(text) } : { kind: 'unreadable' };
+  } catch {
+    return { kind: 'unreadable' };
+  }
 }
 
 export function hasLegacyData(storage: Storage): boolean {

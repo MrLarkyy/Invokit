@@ -3,7 +3,7 @@ import { FIXTURE_LOGO, fixtureInvoice, fixtureProfile } from '../test/invoiceFix
 import type { Invoice } from './invoice';
 import { defaultAppearance } from './invoiceAppearance';
 import type { SupplierProfile } from './supplierProfile';
-import { logoUrl, pruneLogos, saveSupplierLogo, storeLogo, TOO_MANY_LOGOS, type StoredLogo } from './logos';
+import { LOGO_ID, logoUrl, pruneLogos, saveSupplierLogo, storeLogo, TOO_MANY_LOGOS, type StoredLogo } from './logos';
 
 /** A distinct valid PNG data URL per n: the 1×1 PNG with a different filler block after its header. */
 function otherLogo(n: number): string {
@@ -22,9 +22,19 @@ describe('storeLogo', () => {
     expect(again.logos).toHaveLength(1);
   });
 
-  it('never reuses an id that is still stored', () => {
-    const logos: StoredLogo[] = [{ id: 'logo-7', dataUrl: FIXTURE_LOGO }];
-    expect(storeLogo(logos, otherLogo(1)).id).toBe('logo-8');
+  it('takes the lowest id no stored logo holds', () => {
+    const logos: StoredLogo[] = [
+      { id: 'logo-1', dataUrl: otherLogo(1) },
+      { id: 'logo-3', dataUrl: otherLogo(3) },
+    ];
+    expect(storeLogo(logos, otherLogo(2)).id).toBe('logo-2');
+  });
+
+  it('keeps a new id valid next to the highest id a backup may hold', () => {
+    const logos: StoredLogo[] = [{ id: 'logo-999999999', dataUrl: otherLogo(9) }];
+    const { id } = storeLogo(logos, otherLogo(1));
+    expect(id).toBe('logo-1');
+    expect(LOGO_ID.test(id)).toBe(true);
   });
 
   it('refuses the 21st logo and an invalid one', () => {

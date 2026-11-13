@@ -5,9 +5,13 @@ import { useStore } from '../StoreProvider';
 import { IconAlert, IconDownload } from './Icons';
 import { useToast } from './Toast';
 
-/** Warnings about the browser storage: blocked, unreadable data, or Invokit data that no longer fits. */
+/**
+ * Warnings about the browser storage: blocked, unreadable data, Invokit data that no longer fits, or an older Invoo
+ * open in another tab.
+ */
 export function StorageNotice() {
-  const { data, dispatch, persistent, canWrite, dataReplaced, loaded, legacyBlocking, removeLegacy } = useStore();
+  const { data, dispatch, persistent, canWrite, dataReplaced, olderTab, loaded, legacyBlocking, removeLegacy } =
+    useStore();
   const toast = useToast();
   const [backupTaken, setBackupTaken] = useState(false);
   const [originalTaken, setOriginalTaken] = useState(false);
@@ -86,6 +90,16 @@ export function StorageNotice() {
               </div>
             ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {olderTab ? (
+        <div className="container banner" role="alert">
+          <IconAlert size={18} />
+          <p>
+            Invoo je otevřené i ve starší verzi v jiné záložce a přepsalo uložená data. Tady zůstala data aktuální a
+            znovu se uložila. Tu druhou záložku obnov, jinak může data zase přepsat; co jsi v ní změnil, se neuložilo.
+          </p>
         </div>
       ) : null}
 

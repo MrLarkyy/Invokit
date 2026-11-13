@@ -19,7 +19,9 @@ export interface LogoBook {
 
 export const LOGO_ID = /^logo-[1-9]\d{0,8}$/;
 
-export const TOO_MANY_LOGOS = `Invoo pojme nejvýš ${LIMITS.logos} různých log a vystavené faktury už je mají. Použij některé z nich.`;
+export const TOO_MANY_LOGOS =
+  `Invoo pojme nejvýš ${LIMITS.logos} různých log a uložené faktury už všechna používají. Smaž starší faktury ` +
+  's jinými logy, nebo vyber znovu soubor loga, které už některá faktura má.';
 const INVALID_LOGO = 'Logo musí být obrázek PNG, JPEG nebo WebP do 50 000 znaků.';
 
 /** The logos with this one added, or the same one found; throws a Czech message for an invalid one or one too many. */
@@ -28,8 +30,11 @@ export function storeLogo(logos: readonly StoredLogo[], dataUrl: string): { logo
   const same = logos.find((logo) => logo.dataUrl === dataUrl);
   if (same) return { logos: [...logos], id: same.id };
   if (logos.length >= LIMITS.logos) throw new Error(TOO_MANY_LOGOS);
-  const highest = Math.max(0, ...logos.map((logo) => Number(logo.id.slice('logo-'.length)) || 0));
-  const id = `logo-${highest + 1}`;
+  // The lowest free number: with at most 20 logos it stays small, whatever ids a restored backup brought.
+  const taken = new Set(logos.map((logo) => logo.id));
+  let n = 1;
+  while (taken.has(`logo-${n}`)) n += 1;
+  const id = `logo-${n}`;
   return { logos: [...logos, { id, dataUrl }], id };
 }
 
