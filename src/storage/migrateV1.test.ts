@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defaultAppearance } from '../domain/invoiceAppearance';
 import { computeTotals } from '../domain/invoiceTotals';
 import { parseAppData } from './appDataSchema';
 import type { AppDataV1, InvoiceItemV1, PartyV1, SavedInvoiceV1 } from './appDataV1';
@@ -131,13 +132,17 @@ describe('migrateV1', () => {
     expect(computeTotals(migrated.items, false).totalCents).toBe(10_000);
   });
 
-  it('turns a v1 backup file into valid v2 data', () => {
+  it('turns a v1 backup file into valid v3 data with the default look and no logos', () => {
     const file = JSON.stringify(
       dataV1([invoiceV1('2026-09-001', [{ quantity: '1', unit: 'ks', description: 'A', unitPrice: '1' }])]),
     );
     const data = parseAppData(file);
-    expect(data.version).toBe(2);
+    expect(data.version).toBe(3);
     expect(data.invoices[0]?.number).toBe('2026-09-001');
+    expect(data.logos).toEqual([]);
+    expect(data.invoices[0]?.appearance).toEqual(defaultAppearance());
+    expect(data.supplier?.appearance).toEqual(defaultAppearance());
+    expect(computeTotals(data.invoices[0]!.items, false).totalCents).toBe(100);
   });
 });
 

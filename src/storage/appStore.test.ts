@@ -60,7 +60,7 @@ describe('app store', () => {
     expect(resumed.store).toEqual({ ...unsaved, canWrite: true });
     expect(storage.getItem(BROKEN_DATA_KEY)).toBe(OLDER_COPY);
 
-    const later = apply(storage, resumed.store, { type: 'supplier/save', supplier: fixtureProfile() });
+    const later = apply(storage, resumed.store, { type: 'supplier/save', supplier: fixtureProfile(), logo: null });
     expect(later.written).toBe('saved');
     const reloaded = loadAppData(storage);
     expect(reloaded).toMatchObject({ recovered: false, readOnly: false });
@@ -120,7 +120,7 @@ describe('app store', () => {
     const others: AppStoreAction[] = [
       saveInvoice,
       { type: 'invoice/setPaid', id: '2026-09-001', paidAt: '2026-09-10' },
-      { type: 'supplier/save', supplier: fixtureProfile() },
+      { type: 'supplier/save', supplier: fixtureProfile(), logo: null },
       { type: 'backup/exported', at: '2026-09-30' },
       { type: 'customer/delete', customer: fixtureInvoice().customer },
       { type: 'catalog/delete', description: 'Vývoj' },

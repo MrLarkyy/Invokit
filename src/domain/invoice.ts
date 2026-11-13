@@ -1,3 +1,5 @@
+import type { InvoiceAppearance } from './invoiceAppearance';
+
 export type VatRate = 0 | 12 | 21;
 
 /** Listed highest first, as the invoice prints them. */
@@ -46,6 +48,8 @@ export interface Invoice {
   /** Digits only, at most 10. */
   variableSymbol: string;
   supplier: SupplierSnapshot;
+  /** The look it was saved with; like the supplier, a later change of the default never alters it. */
+  appearance: InvoiceAppearance;
   customer: Party;
   items: InvoiceItem[];
   note: string;

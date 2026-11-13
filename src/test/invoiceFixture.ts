@@ -1,7 +1,12 @@
 import type { Invoice, InvoiceItem, VatRate } from '../domain/invoice';
+import { defaultAppearance } from '../domain/invoiceAppearance';
 import type { SupplierProfile } from '../domain/supplierProfile';
 
 // Invented companies and numbers only. 27410587 passes the IČO check; both accounts pass mod 11.
+
+/** A 1×1 transparent PNG, the smallest valid logo. */
+export const FIXTURE_LOGO =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 export function fixtureItem(
   description: string,
@@ -22,6 +27,7 @@ export function fixtureProfile(overrides: Partial<SupplierProfile> = {}): Suppli
     accountPrefix: '19',
     accountNumber: '2000145399',
     bankCode: '0800',
+    appearance: defaultAppearance(),
     ...overrides,
   };
 }
@@ -41,6 +47,7 @@ export function fixtureInvoice(overrides: Partial<Invoice> = {}): Invoice {
       registryNote: '',
       bankAccount: '19-2000145399/0800',
     },
+    appearance: defaultAppearance(),
     customer: { name: 'Odběratel Test a.s.', street: 'Testovací 5', city: 'Brno', zip: '602 00', ico: '', dic: '' },
     items: [fixtureItem('Vývoj', '10', 80_000)],
     note: '',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureInvoice } from '../test/invoiceFixture';
+import { FIXTURE_LOGO, fixtureInvoice } from '../test/invoiceFixture';
 import { emptyAppData } from './appData';
 import {
   BROKEN_DATA_KEY,
@@ -127,6 +127,33 @@ describe('loadAppData', () => {
     expect(removeLegacyData(storage)).toBe(true);
     expect(hasLegacyData(storage)).toBe(false);
     expect(storage.getItem(LEGACY_DRAFT_KEY)).toBeNull();
+  });
+});
+
+describe('stored data from before version 3', () => {
+  it('loads v2 text under the data key as v3 with the default look', () => {
+    const storage = new MemoryStorage();
+    const v3 = { ...emptyAppData(), invoices: [fixtureInvoice()] };
+    const raw = JSON.parse(JSON.stringify(v3)) as Record<string, unknown> & { invoices: Record<string, unknown>[] };
+    raw.version = 2;
+    delete raw.logos;
+    delete raw.invoices[0]!.appearance;
+    storage.setItem(DATA_KEY, JSON.stringify(raw));
+    const loaded = loadAppData(storage);
+    expect(loaded.recovered).toBe(false);
+    expect(loaded.data).toEqual(v3);
+  });
+
+  it('saves and loads v3 with a logo unchanged', () => {
+    const storage = new MemoryStorage();
+    const look = { template: 'klasik' as const, accent: '#1d4ed8', logoId: 'logo-1', brandFooter: false };
+    const data = {
+      ...emptyAppData(),
+      invoices: [fixtureInvoice({ appearance: look })],
+      logos: [{ id: 'logo-1', dataUrl: FIXTURE_LOGO }],
+    };
+    expect(saveAppData(storage, data)).toBe(true);
+    expect(loadAppData(storage).data).toEqual(data);
   });
 });
 

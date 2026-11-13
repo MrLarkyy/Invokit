@@ -1,5 +1,6 @@
 import { addDays, diffDays } from './dates';
 import { emptyParty, type Invoice, type InvoiceItem } from './invoice';
+import { defaultAppearance } from './invoiceAppearance';
 import { nextNumber, uniqueInvoiceId, variableSymbolFor } from './invoiceNumber';
 import { savedProfile, snapshotOf, type SupplierProfile } from './supplierProfile';
 
@@ -14,10 +15,11 @@ export function newItem(vatPayer: boolean, newId: () => string): InvoiceItem {
   return { id: newId(), description: '', quantity: '1', unit: 'ks', unitPriceCents: 0, vatRate: vatPayer ? 21 : 0 };
 }
 
-/** A fresh invoice continuing the number series, with the current supplier profile. */
+/** A fresh invoice continuing the number series, with the current supplier profile and its look. */
 export function createBlankInvoice(book: InvoiceBook, today: string, newId: () => string): Invoice {
   const number = nextNumber(book.invoices, today);
-  const supplier = snapshotOf(savedProfile(book));
+  const profile = savedProfile(book);
+  const supplier = snapshotOf(profile);
   return {
     id: uniqueInvoiceId(number, new Set(book.invoices.map((i) => i.id))),
     number,
@@ -26,6 +28,7 @@ export function createBlankInvoice(book: InvoiceBook, today: string, newId: () =
     taxableSupplyDate: today,
     variableSymbol: variableSymbolFor(number),
     supplier,
+    appearance: { ...(profile?.appearance ?? defaultAppearance()) },
     customer: emptyParty(),
     items: [newItem(supplier.vatPayer, newId)],
     note: '',
@@ -37,7 +40,10 @@ export function createBlankInvoice(book: InvoiceBook, today: string, newId: () =
   };
 }
 
-/** A copy dated today with a new number, the same payment term and the current supplier profile; unpaid. */
+/**
+ * A copy dated today with a new number, the same payment term and template, and the current supplier profile with
+ * its accent, logo and footer; unpaid.
+ */
 export function duplicateInvoice(source: Invoice, book: InvoiceBook, today: string, newId: () => string): Invoice {
   const blank = createBlankInvoice(book, today, newId);
   const term = Math.max(0, diffDays(source.issueDate, source.dueDate) || 0);
@@ -45,6 +51,7 @@ export function duplicateInvoice(source: Invoice, book: InvoiceBook, today: stri
     ...blank,
     dueDate: addDays(today, term),
     supplier: book.supplier ? blank.supplier : structuredClone(source.supplier),
+    appearance: { ...blank.appearance, template: source.appearance.template },
     customer: { ...source.customer },
     // A copied line is a new line: the migrated rounding of the source does not carry over.
     items: source.items.map((item) => ({

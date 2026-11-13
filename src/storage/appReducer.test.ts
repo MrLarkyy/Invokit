@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureInvoice, fixtureProfile } from '../test/invoiceFixture';
+import { defaultAppearance } from '../domain/invoiceAppearance';
+import { logoUrl } from '../domain/logos';
+import { createBlankInvoice } from '../domain/newInvoice';
+import { FIXTURE_LOGO, fixtureInvoice, fixtureProfile } from '../test/invoiceFixture';
 import { emptyAppData, type AppData } from './appData';
 import { appReducer } from './appReducer';
 
@@ -24,9 +27,60 @@ describe('appReducer', () => {
 
   it('saves the profile as a copy', () => {
     const profile = fixtureProfile();
-    const data = appReducer(emptyAppData(), { type: 'supplier/save', supplier: profile });
+    const data = appReducer(emptyAppData(), { type: 'supplier/save', supplier: profile, logo: null });
     profile.party.name = 'Changed';
     expect(data.supplier?.party.name).toBe('Ukázka s.r.o.');
+  });
+
+  it('never changes a saved invoice when the default look, accent, logo or footer change', () => {
+    let data = appReducer(emptyAppData(), { type: 'supplier/save', supplier: fixtureProfile(), logo: FIXTURE_LOGO });
+    const issued = createBlankInvoice(data, '2026-09-02', () => 'r1');
+    data = appReducer(data, { type: 'invoice/save', invoice: issued, now: '2026-09-02T10:00:00Z' });
+    const before = structuredClone(data.invoices[0]!);
+    expect(before.appearance).toEqual({ template: 'invoo', accent: null, logoId: 'logo-1', brandFooter: true });
+    const changed = fixtureProfile({
+      appearance: { template: 'klasik', accent: '#1d4ed8', logoId: null, brandFooter: false },
+    });
+    data = appReducer(data, { type: 'supplier/save', supplier: changed, logo: FIXTURE_LOGO.replace('YII=', 'YIA=') });
+    data = appReducer(data, { type: 'supplier/save', supplier: changed, logo: null });
+    expect(data.invoices[0]).toEqual(before);
+    expect(logoUrl(data.logos, data.invoices[0]!.appearance.logoId)).toBe(FIXTURE_LOGO);
+    expect(data.supplier?.appearance).toEqual({
+      template: 'klasik',
+      accent: '#1d4ed8',
+      logoId: null,
+      brandFooter: false,
+    });
+  });
+
+  it('saves an invoice naming a logo that is no longer stored without it', () => {
+    const invoice = fixtureInvoice({ appearance: { ...defaultAppearance(), logoId: 'logo-5' } });
+    const data = appReducer(emptyAppData(), { type: 'invoice/save', invoice, now: 'a' });
+    expect(data.invoices[0]?.appearance.logoId).toBeNull();
+  });
+
+  it('drops a logo with the last invoice that prints it', () => {
+    let data = appReducer(emptyAppData(), { type: 'supplier/save', supplier: fixtureProfile(), logo: FIXTURE_LOGO });
+    data = appReducer(data, {
+      type: 'invoice/save',
+      invoice: createBlankInvoice(data, '2026-09-02', () => 'r1'),
+      now: 'a',
+    });
+    data = appReducer(data, { type: 'supplier/save', supplier: fixtureProfile(), logo: null });
+    expect(data.logos).toHaveLength(1);
+    data = appReducer(data, { type: 'invoice/delete', id: data.invoices[0]!.id });
+    expect(data.logos).toEqual([]);
+  });
+
+  it('leaves the data as is when a logo cannot be stored', () => {
+    const data = saved();
+    expect(
+      appReducer(data, {
+        type: 'supplier/save',
+        supplier: fixtureProfile(),
+        logo: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+      }),
+    ).toBe(data);
   });
 
   it('deletes a saved customer and catalog item', () => {

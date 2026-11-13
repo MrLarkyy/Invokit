@@ -5,6 +5,7 @@ import { isValidIco } from '../../czech/ico';
 import { formatCzechDate } from '../../domain/dates';
 import type { CatalogItem, Party } from '../../domain/invoice';
 import { LIMITS } from '../../domain/limits';
+import { logoUrl } from '../../domain/logos';
 import { createBlankInvoice } from '../../domain/newInvoice';
 import { byDescription, byName } from '../../domain/records';
 import { emptyProfile, profileAccount, savedProfile, type SupplierProfile } from '../../domain/supplierProfile';
@@ -67,7 +68,7 @@ export function Settings() {
       : BANKS;
 
   const save = () => {
-    if (dispatch({ type: 'supplier/save', supplier: form })) {
+    if (dispatch({ type: 'supplier/save', supplier: form, logo: logoUrl(data.logos, form.appearance.logoId) })) {
       toast('Údaje jsou uložené. Použijí se na nových fakturách, vystavené zůstávají beze změny.', 'happy');
     } else {
       toast(notStored('údaje platí'));

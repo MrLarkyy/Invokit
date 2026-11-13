@@ -5,6 +5,7 @@ import { readInvoiceV1 } from './appDataV1';
 import { migrateDraftV1 } from './migrateV1';
 
 // Everything stays in this browser; the JSON backup is the way to move it or keep it safe.
+// The key keeps its name: the schema version is inside the data (3 since templates), older ones are migrated on load.
 export const DATA_KEY = 'invoo.data.v2';
 export const BROKEN_DATA_KEY = 'invoo.data.v2.broken';
 export const DRAFT_KEY = 'invoo.draft.v2';
@@ -20,7 +21,7 @@ export interface LoadedAppData {
   unreadableText: string | null;
   /** The unreadable text could not be kept aside, so nothing may be written this session (it stays in place). */
   readOnly: boolean;
-  /** The Invokit data was migrated but could not be written as v2 (storage full): the old key is the only copy. */
+  /** The Invokit data was migrated but could not be written (storage full): the old key is the only copy. */
   legacyBlocking: boolean;
 }
 
