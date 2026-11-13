@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { czechAccountToIban, formatIban } from './czechIban';
+import { czechAccountToIban, formatCzechAccount, formatIban, isValidIban, parseCzechAccount } from './czechIban';
 
 describe('czechAccountToIban', () => {
   it('converts an account with a prefix', () => {
@@ -23,5 +23,24 @@ describe('czechAccountToIban', () => {
 
   it('groups by four', () => {
     expect(formatIban('CZ6508000000192000145399')).toBe('CZ65 0800 0000 1920 0014 5399');
+  });
+});
+
+describe('parseCzechAccount and formatCzechAccount', () => {
+  it('splits and joins the parts', () => {
+    expect(parseCzechAccount('19-2000145399/0800')).toEqual({ prefix: '19', number: '2000145399', bankCode: '0800' });
+    expect(parseCzechAccount(' 1234567899 / 0100 ')).toEqual({ prefix: '', number: '1234567899', bankCode: '0100' });
+    expect(parseCzechAccount('CZ6508000000192000145399')).toBeNull();
+    expect(formatCzechAccount({ prefix: '19', number: '2000145399', bankCode: '0800' })).toBe('19-2000145399/0800');
+    expect(formatCzechAccount({ prefix: '', number: '1234567899', bankCode: '' })).toBe('');
+  });
+});
+
+describe('isValidIban', () => {
+  it('accepts both known IBANs and rejects one changed digit', () => {
+    expect(isValidIban('CZ6508000000192000145399')).toBe(true);
+    expect(isValidIban('CZ95 0100 0000 0012 3456 7899')).toBe(true);
+    expect(isValidIban('CZ6508000000192000145398')).toBe(false);
+    expect(isValidIban('CZ65')).toBe(false);
   });
 });
