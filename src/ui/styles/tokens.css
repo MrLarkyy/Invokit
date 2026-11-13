@@ -33,7 +33,7 @@
   --danger-ink: #9f1d1d;
 
   /* Type: self-hosted variable fonts (Fontsource, OFL), system fallbacks while they load. */
-  --font-display: 'Fredoka Variable', ui-rounded, system-ui, sans-serif;
+  --font-display: 'Baloo 2 Variable', ui-rounded, system-ui, sans-serif;
   --font-body: 'Nunito Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* Shape */
