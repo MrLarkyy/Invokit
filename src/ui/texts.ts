@@ -18,3 +18,16 @@ export function dueLabel(invoice: Invoice, today: string): string {
   if (days > 0) return `splatná za ${czechPlural(days, DAYS)}`;
   return `${czechPlural(-days, DAYS)} po splatnosti`;
 }
+
+/**
+ * Said instead of "saved" after a change that did not reach the browser storage (saving off, write refused,
+ * storage blocked): "Neuloženo: faktura 2026-09-001 zůstane jen do zavření stránky."
+ */
+export function notStored(what: string): string {
+  return `Neuloženo: ${what} jen do zavření stránky.`;
+}
+
+/** A success message may stand alone only when the change is stored; otherwise it says that it is not. */
+export function withStoredNote(message: string, stored: boolean): string {
+  return stored ? message : `${message} ${notStored('změna platí')}`;
+}

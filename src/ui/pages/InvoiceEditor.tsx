@@ -18,7 +18,7 @@ import { LIMITS } from '../../domain/limits';
 import { centsToInput, formatCzk, formatQuantity } from '../../domain/money';
 import { createBlankInvoice, newItem, refreshDraft } from '../../domain/newInvoice';
 import { byDescription, byName, saveProblem } from '../../domain/records';
-import { savedProfile, snapshotOf } from '../../domain/supplierProfile';
+import { completeSupplierSnapshot, savedProfile, snapshotOf } from '../../domain/supplierProfile';
 import { loadDraft, saveDraft } from '../../storage/appDataStorage';
 import { newRowId, todayIso } from '../clock';
 import { AdSlot } from '../components/AdSlot';
@@ -33,6 +33,7 @@ import { Toggle } from '../components/Toggle';
 import { printInvoice } from '../printInvoice';
 import { navigate, toHash } from '../router';
 import { useStore } from '../StoreProvider';
+import { notStored } from '../texts';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const TERMS = [7, 14, 30];
@@ -210,10 +211,12 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
 
   if (!isNew && !existing) return <NotFound />;
 
-  // A new invoice takes the supplier profile as it is now; an issued one keeps its own snapshot, unless that
-  // snapshot is incomplete (an invoice must name its supplier), which the current profile then replaces.
-  const refreshSupplier = isNew || !isCompleteSupplier(draft.supplier);
-  const invoice: Invoice = refreshSupplier ? { ...draft, supplier: snapshotOf(savedProfile(data)) } : draft;
+  // A new invoice takes the supplier profile as it is now. An issued one keeps its own snapshot (VAT status, bank
+  // account, notes); only the details it lacks to name its supplier are filled in from the profile.
+  const profile = savedProfile(data);
+  const supplier = isNew ? snapshotOf(profile) : completeSupplierSnapshot(draft.supplier, profile);
+  const supplierFilledIn = !isNew && supplier !== draft.supplier;
+  const invoice: Invoice = supplier === draft.supplier ? draft : { ...draft, supplier };
   const supplierComplete = isCompleteSupplier(invoice.supplier);
   const customers = [...data.customers].sort(byName);
   const catalog = [...data.items].sort(byDescription);
@@ -248,8 +251,11 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     });
   };
 
-  /** Validates and saves; returns null (after a Czech message) when the invoice cannot be saved. */
-  const commit = (): Invoice | null => {
+  /**
+   * Validates and saves; returns null (after a Czech message) when the invoice cannot be saved. `stored` is false
+   * when the invoice is kept for this visit only (saving off, write refused, storage blocked).
+   */
+  const commit = (): { invoice: Invoice; stored: boolean } | null => {
     const takenIds = new Set(data.invoices.map((i) => i.id));
     const id = isNew && takenIds.has(invoice.id) ? uniqueInvoiceId(invoice.number, takenIds) : invoice.id;
     const toSave = { ...invoice, id };
@@ -268,24 +274,30 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
       setProblem(next);
       return null;
     }
-    dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString() });
+    const inBrowser = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString() });
     if (isNew && canWrite) saveDraft(storage, null);
-    return toSave;
+    return { invoice: toSave, stored: inBrowser };
   };
 
   const save = () => {
-    const saved = commit();
-    if (!saved) return;
-    toast(`Faktura ${saved.number} je uložená. Hlídám ji do ${formatCzechDate(saved.dueDate)}.`, 'happy');
+    const done = commit();
+    if (!done) return;
+    const saved = done.invoice;
+    if (done.stored) {
+      toast(`Faktura ${saved.number} je uložená. Hlídám ji do ${formatCzechDate(saved.dueDate)}.`, 'happy');
+    } else {
+      toast(notStored(`faktura ${saved.number} zůstane`));
+    }
     navigate({ name: 'faktura', id: saved.id });
   };
 
   const downloadPdf = () => {
-    const saved = commit();
-    if (!saved) return;
+    const done = commit();
+    if (!done) return;
+    if (!done.stored) toast(notStored(`faktura ${done.invoice.number} zůstane`));
     // Print uses @media print in app.css: only the invoice paper goes to the printer or the PDF.
-    printInvoice(saved.number);
-    navigate({ name: 'faktura', id: saved.id });
+    printInvoice(done.invoice.number);
+    navigate({ name: 'faktura', id: done.invoice.id });
   };
 
   const discard = () => {
@@ -303,10 +315,10 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
         <div>
           <h1>{existing ? `Úprava faktury ${existing.number}` : 'Nová faktura'}</h1>
           <p className="page__lead">
-            {existing && !refreshSupplier
-              ? 'Dodavatel, DPH a účet zůstávají tak, jak byly při vystavení.'
+            {supplierFilledIn
+              ? 'Chybějící údaje dodavatele se doplní z nastavení. DPH, účet a poznámky zůstávají jako při vystavení.'
               : existing
-                ? 'Údaje dodavatele na faktuře nebyly úplné, proto se doplní z nastavení.'
+                ? 'Dodavatel, DPH a účet zůstávají tak, jak byly při vystavení.'
                 : 'Vpravo vidíš fakturu tak, jak půjde do tisku. Mění se, jak píšeš.'}
           </p>
         </div>

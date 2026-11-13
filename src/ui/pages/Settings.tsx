@@ -20,6 +20,7 @@ import { SavedRecords } from '../components/SavedRecords';
 import { useToast } from '../components/Toast';
 import { navigate } from '../router';
 import { useStore } from '../StoreProvider';
+import { notStored } from '../texts';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const BANKS: [string, string][] = [
@@ -48,7 +49,7 @@ function ibanPreview(profile: SupplierProfile): string {
 }
 
 export function Settings() {
-  const { data, dispatch, storage, canWrite } = useStore();
+  const { data, dispatch, storage, persistent, canWrite } = useStore();
   const toast = useToast();
   const [saved] = useState(() => savedProfile(data) ?? emptyProfile());
   const [form, setForm] = useState<SupplierProfile>(saved);
@@ -66,8 +67,11 @@ export function Settings() {
       : BANKS;
 
   const save = () => {
-    dispatch({ type: 'supplier/save', supplier: form });
-    toast('Údaje jsou uložené. Použijí se na nových fakturách, vystavené zůstávají beze změny.', 'happy');
+    if (dispatch({ type: 'supplier/save', supplier: form })) {
+      toast('Údaje jsou uložené. Použijí se na nových fakturách, vystavené zůstávají beze změny.', 'happy');
+    } else {
+      toast(notStored('údaje platí'));
+    }
   };
 
   const exportBackup = () => {
@@ -94,9 +98,11 @@ export function Settings() {
 
   const confirmRestore = () => {
     if (!pending) return;
-    dispatch({ type: 'backup/restore', data: pending.data });
+    // A confirmed restore also resumes saving that was off: the restored data replaces the unreadable data.
+    const stored = dispatch({ type: 'backup/restore', data: pending.data });
     setForm(savedProfile(pending.data) ?? emptyProfile());
-    toast(`Data jsou obnovená ze souboru ${pending.fileName}.`, 'happy');
+    if (stored) toast(`Data jsou obnovená ze souboru ${pending.fileName}.`, 'happy');
+    else toast(notStored(`data ze souboru ${pending.fileName} zůstanou`));
     setPending(null);
     clearFile();
   };
@@ -320,8 +326,9 @@ export function Settings() {
               Data a záloha
             </h2>
             <p>
-              Všechno je uložené jen v tomhle prohlížeči: {czechPlural(data.invoices.length, INVOICES)}, tvoje údaje,
-              uložení odběratelé a položky. Když smažeš data prohlížeče, zmizí. Zálohuj si je do souboru.
+              {persistent && canWrite ? 'Všechno je uložené jen v tomhle prohlížeči' : 'Teď se nic neukládá'}:{' '}
+              {czechPlural(data.invoices.length, INVOICES)}, tvoje údaje, uložení odběratelé a položky. Když smažeš data
+              prohlížeče, zmizí. Zálohuj si je do souboru.
             </p>
             <p className="backup__last">
               {data.lastBackupAt
@@ -350,6 +357,7 @@ export function Settings() {
                   Soubor <strong>{pending.fileName}</strong>: {czechPlural(pending.data.invoices.length, INVOICES)},{' '}
                   {czechPlural(pending.data.customers.length, CUSTOMERS)}. Obnovit data? Přepíše to všechno, co je teď
                   uložené.
+                  {canWrite ? null : ' Přepíše to i původní nečitelná data: nejdřív si je nahoře stáhni.'}
                 </p>
                 <div className="restore__actions">
                   <button type="button" className="btn btn--primary btn--sm" onClick={confirmRestore}>

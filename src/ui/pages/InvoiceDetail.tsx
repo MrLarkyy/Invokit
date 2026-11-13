@@ -11,7 +11,7 @@ import { StatusChip } from '../components/StatusChip';
 import { useToast } from '../components/Toast';
 import { navigate, toHash } from '../router';
 import { useStore } from '../StoreProvider';
-import { dueLabel } from '../texts';
+import { dueLabel, withStoredNote } from '../texts';
 import { printInvoice } from '../printInvoice';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { useDuplicateInvoice } from '../useDuplicateInvoice';
@@ -31,19 +31,19 @@ export function InvoiceDetail({ id }: { id: string }) {
 
   const togglePaid = () => {
     if (invoice.paid) {
-      dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
-      toast(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`);
+      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
+      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, stored));
     } else {
-      dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
-      toast(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, 'happy');
+      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
+      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, stored), stored ? 'happy' : 'watch');
     }
   };
 
   const remove = () => {
     if (!window.confirm(`Smazat fakturu ${invoice.number}? Smaže se jen z tohoto prohlížeče a nejde to vrátit.`))
       return;
-    dispatch({ type: 'invoice/delete', id: invoice.id });
-    toast(`Faktura ${invoice.number} je smazaná.`);
+    const stored = dispatch({ type: 'invoice/delete', id: invoice.id });
+    toast(withStoredNote(`Faktura ${invoice.number} je smazaná.`, stored));
     navigate({ name: 'faktury' });
   };
 

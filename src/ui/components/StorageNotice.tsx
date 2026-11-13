@@ -10,9 +10,18 @@ export function StorageNotice() {
   const { data, dispatch, persistent, canWrite, loaded, legacyBlocking, removeLegacy } = useStore();
   const toast = useToast();
   const [backupTaken, setBackupTaken] = useState(false);
+  const [originalTaken, setOriginalTaken] = useState(false);
 
   const downloadOriginal = () => {
-    if (loaded.unreadableText !== null) downloadText(loaded.unreadableText, `invoo-puvodni-data-${todayIso()}.json`);
+    if (loaded.unreadableText === null) return;
+    downloadText(loaded.unreadableText, `invoo-puvodni-data-${todayIso()}.json`);
+    setOriginalTaken(true);
+  };
+
+  // The first write replaces the unreadable data, so it waits for the download and the user's consent.
+  const resumeSaving = () => {
+    const agreed = window.confirm('Zapnout ukládání? Původní data se v prohlížeči přepíšou, zůstanou jen v souboru.');
+    if (agreed && dispatch({ type: 'saving/resume' })) toast('Ukládání je zapnuté, data jsou uložená.', 'happy');
   };
 
   const takeBackup = () => {
@@ -48,16 +57,30 @@ export function StorageNotice() {
           <div className="banner__body">
             <p>
               Uložená data v tomhle prohlížeči se nepodařilo přečíst, proto začínáš s prázdným přehledem.{' '}
-              {canWrite
-                ? 'Původní data zůstala v prohlížeči uložená stranou.'
-                : 'Původní data se nepodařilo uložit stranou, proto teď nic neukládám. Stáhni si je.'}{' '}
-              Máš-li zálohu, obnov ji v nastavení.
+              {!loaded.readOnly
+                ? 'Původní data zůstala v prohlížeči uložená stranou. Máš-li zálohu, obnov ji v nastavení.'
+                : canWrite
+                  ? 'Ukládání je zase zapnuté. Původní data si můžeš stáhnout, dokud stránku nezavřeš.'
+                  : 'Původní data se nepodařilo uložit stranou, proto teď nic neukládám. Stáhni si je a zapni ' +
+                    'ukládání, nebo obnov zálohu v nastavení.'}
             </p>
             {loaded.unreadableText !== null ? (
-              <button type="button" className="btn btn--outline btn--sm" onClick={downloadOriginal}>
-                <IconDownload size={16} />
-                Stáhnout původní data
-              </button>
+              <div className="banner__actions">
+                <button type="button" className="btn btn--outline btn--sm" onClick={downloadOriginal}>
+                  <IconDownload size={16} />
+                  Stáhnout původní data
+                </button>
+                {!canWrite ? (
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    onClick={resumeSaving}
+                    disabled={!originalTaken}
+                  >
+                    Zapnout ukládání
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>

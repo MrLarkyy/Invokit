@@ -13,7 +13,7 @@ import { StatusChip } from '../components/StatusChip';
 import { useToast } from '../components/Toast';
 import { toHash } from '../router';
 import { useStore } from '../StoreProvider';
-import { dueLabel } from '../texts';
+import { dueLabel, withStoredNote } from '../texts';
 import { useDocumentTitle } from '../useDocumentTitle';
 import { useDuplicateInvoice } from '../useDuplicateInvoice';
 
@@ -65,11 +65,11 @@ export function InvoiceList() {
 
   const togglePaid = (invoice: Invoice) => {
     if (invoice.paid) {
-      dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
-      toast(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`);
+      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
+      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, stored));
     } else {
-      dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
-      toast(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, 'happy');
+      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
+      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, stored), stored ? 'happy' : 'watch');
     }
   };
 

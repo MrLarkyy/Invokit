@@ -9,19 +9,23 @@ import {
   saveAppData,
   type LoadedAppData,
 } from '../storage/appDataStorage';
-import { appReducer, type AppAction } from '../storage/appReducer';
+import { appStoreReducer, openAppStore, writeAppStore, type AppStoreAction } from '../storage/appStore';
 import { browserStorage } from './browserStorage';
 import { useToast } from './components/Toast';
 
 interface Store {
   data: AppData;
-  /** Applies the action and stores the result right away (unless this session must not write). */
-  dispatch: (action: AppAction) => void;
+  /**
+   * Applies the action and stores the result right away. True when the data is then stored in the browser; false
+   * while saving is off, when the write was refused (a warning is shown) and when the browser blocks storage, so
+   * the caller never reports an unsaved change as saved.
+   */
+  dispatch: (action: AppStoreAction) => boolean;
   /** The browser storage, or the in-memory stand-in. */
   storage: Storage;
   /** False when the browser blocks localStorage (nothing survives the visit). */
   persistent: boolean;
-  /** False while unreadable data could not be kept aside: nothing is written this session. */
+  /** False while unreadable data has no safe copy: nothing is written until the user resumes saving. */
   canWrite: boolean;
   /** How loading went (unreadable data, Invokit data that does not fit). */
   loaded: LoadedAppData;
@@ -41,21 +45,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [{ storage, persistent }] = useState(browserStorage);
   const [loaded] = useState(() => loadAppData(storage));
   const [legacyBlocking, setLegacyBlocking] = useState(loaded.legacyBlocking);
-  const [data, setData] = useState(loaded.data);
-  const current = useRef(loaded.data);
-  const canWrite = !loaded.readOnly;
+  const [store, setStore] = useState(() => openAppStore(loaded));
+  const current = useRef(store);
 
   const dispatch = useCallback(
-    (action: AppAction) => {
-      const next = appReducer(current.current, action);
-      if (next === current.current) return;
+    (action: AppStoreAction): boolean => {
+      const before = current.current;
+      const next = appStoreReducer(before, action);
+      const written = writeAppStore(storage, before, next);
+      if (written === 'unchanged') return persistent && before.canWrite;
       current.current = next;
-      setData(next);
-      if (!canWrite || saveAppData(storage, next)) return;
-      toast(SAVE_FAILED);
-      if (hasLegacyData(storage)) setLegacyBlocking(true);
+      setStore(next);
+      if (written === 'failed') {
+        toast(SAVE_FAILED);
+        if (hasLegacyData(storage)) setLegacyBlocking(true);
+      }
+      return persistent && written === 'saved';
     },
-    [canWrite, storage, toast],
+    [persistent, storage, toast],
   );
 
   // Another tab wrote new data: take it over without writing it back.
@@ -64,9 +71,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea !== storage || event.key !== DATA_KEY || event.newValue === null) return;
       try {
-        const next = parseAppData(event.newValue);
+        const next = appStoreReducer(current.current, { type: 'data/reload', data: parseAppData(event.newValue) });
         current.current = next;
-        setData(next);
+        setStore(next);
       } catch {
         // Unreadable data from another tab is ignored; this tab keeps what it has.
       }
@@ -76,14 +83,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [persistent, storage]);
 
   const removeLegacy = useCallback(() => {
-    if (!removeLegacyData(storage) || !saveAppData(storage, current.current)) return false;
+    if (!removeLegacyData(storage) || !saveAppData(storage, current.current.data)) return false;
     setLegacyBlocking(false);
     return true;
   }, [storage]);
 
   return (
     <StoreContext.Provider
-      value={{ data, dispatch, storage, persistent, canWrite, loaded, legacyBlocking, removeLegacy }}
+      value={{
+        data: store.data,
+        dispatch,
+        storage,
+        persistent,
+        canWrite: store.canWrite,
+        loaded,
+        legacyBlocking,
+        removeLegacy,
+      }}
     >
       {children}
     </StoreContext.Provider>
