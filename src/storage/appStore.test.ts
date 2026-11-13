@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { fixtureInvoice, fixtureProfile } from '../test/invoiceFixture';
 import { emptyAppData } from './appData';
 import { BROKEN_DATA_KEY, DATA_KEY, loadAppData } from './appDataStorage';
-import { appStoreReducer, openAppStore, writeAppStore, type AppStore, type AppStoreAction } from './appStore';
+import {
+  appStoreReducer,
+  openAppStore,
+  settleAppStore,
+  writeAppStore,
+  type AppStore,
+  type AppStoreAction,
+} from './appStore';
 import { MemoryStorage } from './memoryStorage';
 
 const CORRUPT = '{"version":2,"invoices":"broken"';
@@ -50,7 +57,7 @@ describe('app store', () => {
     const unsaved = apply(storage, openAppStore(loadAppData(storage)), saveInvoice).store;
     const resumed = apply(storage, unsaved, { type: 'saving/resume' });
     expect(resumed.written).toBe('saved');
-    expect(resumed.store).toEqual({ data: unsaved.data, canWrite: true });
+    expect(resumed.store).toEqual({ ...unsaved, canWrite: true });
     expect(storage.getItem(BROKEN_DATA_KEY)).toBe(OLDER_COPY);
 
     const later = apply(storage, resumed.store, { type: 'supplier/save', supplier: fixtureProfile() });
@@ -77,16 +84,37 @@ describe('app store', () => {
   });
 
   it('resumes saving when another tab replaced the unreadable data', () => {
-    const blocked: AppStore = { data: emptyAppData(), canWrite: false };
+    const blocked: AppStore = { data: emptyAppData(), canWrite: false, dataReplaced: false, lastWriteFailed: false };
     const fromOtherTab = { ...emptyAppData(), supplier: fixtureProfile() };
     expect(appStoreReducer(blocked, { type: 'data/reload', data: fromOtherTab })).toEqual({
       data: fromOtherTab,
       canWrite: true,
+      dataReplaced: true,
+      lastWriteFailed: false,
     });
   });
 
+  it('notes a replaced data set only for a restore or a reload', () => {
+    const opened = openAppStore(loadAppData(new MemoryStorage()));
+    expect(opened).toMatchObject({ dataReplaced: false, lastWriteFailed: false });
+    expect(appStoreReducer(opened, saveInvoice).dataReplaced).toBe(false);
+    const restored = appStoreReducer(opened, { type: 'backup/restore', data: emptyAppData() });
+    expect(restored.dataReplaced).toBe(true);
+    expect(appStoreReducer(restored, saveInvoice).dataReplaced).toBe(true);
+  });
+
+  it('follows the outcome of the last write', () => {
+    const opened = openAppStore(loadAppData(new MemoryStorage()));
+    const failed = settleAppStore(opened, 'failed');
+    expect(failed.lastWriteFailed).toBe(true);
+    expect(settleAppStore(failed, 'off')).toBe(failed);
+    expect(settleAppStore(failed, 'unchanged')).toBe(failed);
+    expect(settleAppStore(failed, 'saved').lastWriteFailed).toBe(false);
+    expect(settleAppStore(opened, 'saved')).toBe(opened);
+  });
+
   it('keeps saving off for every other action', () => {
-    let store: AppStore = { data: emptyAppData(), canWrite: false };
+    let store: AppStore = { data: emptyAppData(), canWrite: false, dataReplaced: false, lastWriteFailed: false };
     const others: AppStoreAction[] = [
       saveInvoice,
       { type: 'invoice/setPaid', id: '2026-09-001', paidAt: '2026-09-10' },

@@ -48,7 +48,8 @@ export function saveAppData(storage: Storage, data: AppData): boolean {
 
 function migrateLegacyDraft(storage: Storage, data: AppData): void {
   const raw = read(storage, LEGACY_DRAFT_KEY);
-  if (!raw) return;
+  // A draft already stored as v2 is the user's current one: a start that migrates again must not replace it.
+  if (!raw || loadDraft(storage) !== null) return;
   try {
     const draftV1 = readInvoiceV1(JSON.parse(raw), 'koncept');
     // Invokit kept the last printed invoice as its draft: one already saved is not a new invoice.

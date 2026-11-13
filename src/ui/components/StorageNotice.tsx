@@ -7,7 +7,7 @@ import { useToast } from './Toast';
 
 /** Warnings about the browser storage: blocked, unreadable data, or Invokit data that no longer fits. */
 export function StorageNotice() {
-  const { data, dispatch, persistent, canWrite, loaded, legacyBlocking, removeLegacy } = useStore();
+  const { data, dispatch, persistent, canWrite, dataReplaced, loaded, legacyBlocking, removeLegacy } = useStore();
   const toast = useToast();
   const [backupTaken, setBackupTaken] = useState(false);
   const [originalTaken, setOriginalTaken] = useState(false);
@@ -56,13 +56,16 @@ export function StorageNotice() {
           <IconAlert size={18} />
           <div className="banner__body">
             <p>
-              Uložená data v tomhle prohlížeči se nepodařilo přečíst, proto začínáš s prázdným přehledem.{' '}
-              {!loaded.readOnly
-                ? 'Původní data zůstala v prohlížeči uložená stranou. Máš-li zálohu, obnov ji v nastavení.'
-                : canWrite
-                  ? 'Ukládání je zase zapnuté. Původní data si můžeš stáhnout, dokud stránku nezavřeš.'
-                  : 'Původní data se nepodařilo uložit stranou, proto teď nic neukládám. Stáhni si je a zapni ' +
-                    'ukládání, nebo obnov zálohu v nastavení.'}
+              Uložená data v tomhle prohlížeči se nepodařilo přečíst
+              {dataReplaced ? '.' : ', proto začínáš s prázdným přehledem.'}{' '}
+              {dataReplaced
+                ? 'Data jsou teď obnovená.'
+                : !loaded.readOnly
+                  ? 'Původní data zůstala v prohlížeči uložená stranou. Máš-li zálohu, obnov ji v nastavení.'
+                  : canWrite
+                    ? 'Ukládání je zase zapnuté. Původní data si můžeš stáhnout, dokud stránku nezavřeš.'
+                    : 'Původní data se nepodařilo uložit stranou, proto teď nic neukládám. Stáhni si je a zapni ' +
+                      'ukládání, nebo obnov zálohu v nastavení.'}
             </p>
             {loaded.unreadableText !== null ? (
               <div className="banner__actions">

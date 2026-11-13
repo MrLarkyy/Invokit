@@ -10,7 +10,7 @@ import {
   saveAppData,
   type LoadedAppData,
 } from '../storage/appDataStorage';
-import { appStoreReducer, openAppStore, writeAppStore, type AppStoreAction } from '../storage/appStore';
+import { appStoreReducer, openAppStore, settleAppStore, writeAppStore, type AppStoreAction } from '../storage/appStore';
 import { DraftSession } from '../storage/draftSession';
 import { browserStorage } from './browserStorage';
 import { useToast } from './components/Toast';
@@ -31,6 +31,10 @@ interface Store {
   persistent: boolean;
   /** False while unreadable data has no safe copy: nothing is written until the user resumes saving. */
   canWrite: boolean;
+  /** A restore or another tab's data replaced the data this visit started with. */
+  dataReplaced: boolean;
+  /** The browser refused the last write. */
+  lastWriteFailed: boolean;
   /** How loading went (unreadable data, Invokit data that does not fit). */
   loaded: LoadedAppData;
   /** The Invokit data is the only copy because the new data does not fit into the browser storage. */
@@ -52,7 +56,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState(() => openAppStore(loaded));
   const current = useRef(store);
   const [drafts] = useState(() => new DraftSession(storage));
-  const { canWrite } = store;
+  const { canWrite, dataReplaced, lastWriteFailed } = store;
   const loadDraft = useCallback(() => drafts.load(), [drafts]);
   // A new function once saving resumes, so the open editor writes its draft again.
   const saveDraft = useCallback((draft: Invoice | null) => drafts.save(draft, canWrite), [drafts, canWrite]);
@@ -63,8 +67,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const next = appStoreReducer(before, action);
       const written = writeAppStore(storage, before, next);
       if (written === 'unchanged') return persistent && before.canWrite;
-      current.current = next;
-      setStore(next);
+      const settled = settleAppStore(next, written);
+      current.current = settled;
+      setStore(settled);
       if (written === 'failed') {
         toast(SAVE_FAILED);
         if (hasLegacyData(storage)) setLegacyBlocking(true);
@@ -106,6 +111,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         saveDraft,
         persistent,
         canWrite,
+        dataReplaced,
+        lastWriteFailed,
         loaded,
         legacyBlocking,
         removeLegacy,

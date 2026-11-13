@@ -10,6 +10,10 @@ export interface AppStore {
    * resumes once the user has that data in a file, or replaces it by restoring a backup.
    */
   canWrite: boolean;
+  /** A restored backup or another tab's data replaced what this visit started with. */
+  dataReplaced: boolean;
+  /** The last attempt to store a change was refused by the browser. */
+  lastWriteFailed: boolean;
 }
 
 /** `saving/resume`: the user downloaded the unreadable data and agreed to have it replaced. */
@@ -19,7 +23,7 @@ export type AppStoreAction = AppAction | { type: 'saving/resume' };
 export type AppStoreWrite = 'saved' | 'unchanged' | 'off' | 'failed';
 
 export function openAppStore(loaded: Pick<LoadedAppData, 'data' | 'readOnly'>): AppStore {
-  return { data: loaded.data, canWrite: !loaded.readOnly };
+  return { data: loaded.data, canWrite: !loaded.readOnly, dataReplaced: false, lastWriteFailed: false };
 }
 
 export function appStoreReducer(store: AppStore, action: AppStoreAction): AppStore {
@@ -27,7 +31,17 @@ export function appStoreReducer(store: AppStore, action: AppStoreAction): AppSto
   const data = appReducer(store.data, action);
   // A confirmed restore replaces the unreadable data; a reload means another tab already replaced it.
   const canWrite = store.canWrite || action.type === 'backup/restore' || action.type === 'data/reload';
-  return data === store.data && canWrite === store.canWrite ? store : { data, canWrite };
+  const dataReplaced = store.dataReplaced || action.type === 'backup/restore' || action.type === 'data/reload';
+  return data === store.data && canWrite === store.canWrite && dataReplaced === store.dataReplaced
+    ? store
+    : { ...store, data, canWrite, dataReplaced };
+}
+
+/** Notes the outcome of a write in the store; other outcomes leave it as it is. */
+export function settleAppStore(store: AppStore, written: AppStoreWrite): AppStore {
+  if (written !== 'saved' && written !== 'failed') return store;
+  const lastWriteFailed = written === 'failed';
+  return lastWriteFailed === store.lastWriteFailed ? store : { ...store, lastWriteFailed };
 }
 
 /**

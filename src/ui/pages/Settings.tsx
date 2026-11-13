@@ -48,8 +48,9 @@ function ibanPreview(profile: SupplierProfile): string {
 }
 
 export function Settings() {
-  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite } = useStore();
+  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite, lastWriteFailed, legacyBlocking } = useStore();
   const toast = useToast();
+  const storing = persistent && canWrite && !lastWriteFailed && !legacyBlocking;
   const [saved] = useState(() => savedProfile(data) ?? emptyProfile());
   const [form, setForm] = useState<SupplierProfile>(saved);
   const [pending, setPending] = useState<PendingRestore | null>(null);
@@ -325,7 +326,7 @@ export function Settings() {
               Data a záloha
             </h2>
             <p>
-              {persistent && canWrite ? 'Všechno je uložené jen v tomhle prohlížeči' : 'Teď se nic neukládá'}:{' '}
+              {storing ? 'Všechno je uložené jen v tomhle prohlížeči' : 'Teď se nic neukládá'}:{' '}
               {czechPlural(data.invoices.length, INVOICES)}, tvoje údaje, uložení odběratelé a položky. Když smažeš data
               prohlížeče, zmizí. Zálohuj si je do souboru.
             </p>

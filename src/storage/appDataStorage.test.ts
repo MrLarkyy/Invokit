@@ -103,6 +103,18 @@ describe('loadAppData', () => {
     expect(loadDraft(storage)).toBeNull();
   });
 
+  it('keeps an existing v2 draft on a start that migrates the v1 data again', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(LEGACY_DATA_KEY, v1Data);
+    storage.setItem(LEGACY_DRAFT_KEY, JSON.stringify({ ...v1Invoice, number: '2026-09-002' }));
+    storage.failingKeys.add(DATA_KEY);
+    loadAppData(storage);
+    const edited = fixtureInvoice({ number: '2026-09-077' });
+    saveDraft(storage, edited);
+    loadAppData(storage);
+    expect(loadDraft(storage)).toEqual(edited);
+  });
+
   it('reports Invokit data that does not fit as v2, and removes the old keys on request', () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_DATA_KEY, v1Data);
