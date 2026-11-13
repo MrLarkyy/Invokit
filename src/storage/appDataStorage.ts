@@ -31,6 +31,8 @@ export interface LoadedAppData {
    * stays as it is stored until the first change.
    */
   storedCurrent: boolean;
+  /** The text under the data key when loading finished (null: none), to tell a write another tab made since. */
+  storedText: string | null;
 }
 
 function read(storage: Storage, key: string): string | null {
@@ -70,7 +72,7 @@ function migrateLegacyDraft(storage: Storage, data: AppData): void {
   }
 }
 
-function unreadable(text: string, readOnly: boolean): LoadedAppData {
+function unreadable(text: string, readOnly: boolean, storedText: string | null): LoadedAppData {
   return {
     data: emptyAppData(),
     recovered: true,
@@ -78,6 +80,7 @@ function unreadable(text: string, readOnly: boolean): LoadedAppData {
     readOnly,
     legacyBlocking: false,
     storedCurrent: false,
+    storedText,
   };
 }
 
@@ -108,11 +111,12 @@ export function loadAppData(storage: Storage): LoadedAppData {
         readOnly: false,
         legacyBlocking: false,
         storedCurrent: storedVersion(raw) === CURRENT_VERSION,
+        storedText: raw,
       };
     } catch {
       const kept = read(storage, BROKEN_DATA_KEY);
       const safe = kept === raw || (kept === null && write(storage, BROKEN_DATA_KEY, raw));
-      return unreadable(raw, !safe);
+      return unreadable(raw, !safe, raw);
     }
   }
   const legacy = read(storage, LEGACY_DATA_KEY);
@@ -122,11 +126,12 @@ export function loadAppData(storage: Storage): LoadedAppData {
       data = parseAppData(legacy);
     } catch {
       // The old key is never written, so the new data may be stored next to it.
-      return unreadable(legacy, false);
+      return unreadable(legacy, false, null);
     }
   }
   migrateLegacyDraft(storage, data);
-  const saved = saveAppData(storage, data);
+  const text = JSON.stringify(data);
+  const saved = write(storage, DATA_KEY, text);
   return {
     data,
     recovered: false,
@@ -134,7 +139,13 @@ export function loadAppData(storage: Storage): LoadedAppData {
     readOnly: false,
     legacyBlocking: legacy !== null && !saved,
     storedCurrent: saved,
+    storedText: saved ? text : null,
   };
+}
+
+/** The text under the data key as it is now; null when there is none or it cannot be read. */
+export function readDataText(storage: Storage): string | null {
+  return read(storage, DATA_KEY);
 }
 
 /** What another tab wrote under DATA_KEY. */

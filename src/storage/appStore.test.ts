@@ -5,6 +5,7 @@ import { emptyAppData, type AppData } from './appData';
 import { BROKEN_DATA_KEY, DATA_KEY, loadAppData } from './appDataStorage';
 import {
   appStoreReducer,
+  catchUpOtherTab,
   followOtherTab,
   openAppStore,
   settleAppStore,
@@ -126,6 +127,20 @@ describe('app store', () => {
     expect(settleAppStore(settleAppStore(opened, 'failed'), 'saved')).toEqual(opened);
   });
 
+  it('drops the note of a refused write once another tab’s data replaces this tab’s', () => {
+    const failed = settleAppStore(openAppStore(loadAppData(new MemoryStorage())), 'failed');
+    expect(failed.lastWriteFailed).toBe(true);
+    expect(appStoreReducer(failed, saveInvoice).lastWriteFailed).toBe(true);
+    expect(appStoreReducer(failed, { type: 'backup/restore', data: emptyAppData() }).lastWriteFailed).toBe(true);
+    expect(appStoreReducer(failed, { type: 'data/reload', data: emptyAppData() }).lastWriteFailed).toBe(false);
+    // The same data again still clears the note.
+    expect(appStoreReducer(failed, { type: 'data/reload', data: failed.data })).toEqual({
+      ...failed,
+      dataReplaced: true,
+      lastWriteFailed: false,
+    });
+  });
+
   it('knows whether the storage holds current data: loaded so, or once a write is stored', () => {
     expect(openAppStore(loadAppData(new MemoryStorage())).storedCurrent).toBe(true);
     const storage = new MemoryStorage();
@@ -232,6 +247,17 @@ describe('followOtherTab', () => {
     const olderStorage = new MemoryStorage();
     const fromOlder = follow(olderStorage, openedOnOlder(olderStorage), other);
     expect(fromOlder).toMatchObject({ data: withProfile, olderTab: null, storedCurrent: true });
+  });
+
+  it('has nothing unsaved left after a take-over, so a write refused before is no longer noted', () => {
+    const storage = new MemoryStorage();
+    const store = opened(storage);
+    storage.failWrites = true;
+    const unsaved = change(storage, store, { type: 'supplier/save', supplier: fixtureProfile(), logo: null });
+    storage.failWrites = false;
+    expect(unsaved.lastWriteFailed).toBe(true);
+    const next = follow(storage, unsaved, JSON.stringify(withInvoice));
+    expect(next).toMatchObject({ data: withInvoice, lastWriteFailed: false });
   });
 
   it('takes over what an older Invoo saves while the stored data is still version 2, and writes nothing', () => {
@@ -380,6 +406,14 @@ describe('followOtherTab', () => {
     const next = followOtherTab(storage, store, older, JSON.stringify(current));
     expect(next).toMatchObject({ data: current, olderTab: 'overwrote', storedCurrent: true, lastWriteFailed: false });
     expect(loadAppData(storage).data).toEqual(current);
+
+    // A refused restore is noted: the current data is then in this tab only.
+    const full = new MemoryStorage();
+    const start = openedOnOlder(full);
+    full.failWrites = true;
+    const refused = followOtherTab(full, start, older, JSON.stringify(current));
+    expect(refused).toMatchObject({ data: current, olderTab: 'overwrote', lastWriteFailed: true });
+    expect(full.getItem(DATA_KEY)).toBe(older);
   });
 
   it('takes the older tab’s save over after a refused change here: the stored data is still version 2', () => {
@@ -390,7 +424,11 @@ describe('followOtherTab', () => {
     storage.failWrites = false;
     expect(unsaved).toMatchObject({ lastWriteFailed: true, storedCurrent: false });
     const older = olderAppData(withProfile);
-    expect(follow(storage, unsaved, older)).toMatchObject({ data: withProfile, olderTab: 'followed' });
+    expect(follow(storage, unsaved, older)).toMatchObject({
+      data: withProfile,
+      olderTab: 'followed',
+      lastWriteFailed: false,
+    });
     expect(storage.getItem(DATA_KEY)).toBe(older);
   });
 
@@ -420,5 +458,117 @@ describe('followOtherTab', () => {
     expect(next.data).toBe(store.data);
     expect(next.olderTab).toBe('overwrote');
     expect(loadAppData(storage).data).toEqual(store.data);
+  });
+});
+
+describe('catchUpOtherTab', () => {
+  const withProfile: AppData = { ...emptyAppData(), supplier: fixtureProfile() };
+  const withInvoice: AppData = { ...emptyAppData(), invoices: [fixtureInvoice()] };
+
+  /** Loads what the storage holds, as the page does before it listens to the key. */
+  const load = (storage: Storage) => {
+    const loaded = loadAppData(storage);
+    return { store: openAppStore(loaded), loadedText: loaded.storedText };
+  };
+
+  const holding = (text: string) => {
+    const storage = new MemoryStorage();
+    storage.setItem(DATA_KEY, text);
+    return storage;
+  };
+
+  it('leaves the store as it is while the key holds what was loaded', () => {
+    const starts = [
+      new MemoryStorage(),
+      holding(JSON.stringify(withInvoice)),
+      holding(olderAppData(withInvoice)),
+      holding(CORRUPT),
+      blockedByOlderCopy(),
+    ];
+    for (const storage of starts) {
+      const text = storage.getItem(DATA_KEY);
+      const { store, loadedText } = load(storage);
+      expect(catchUpOtherTab(storage, store, loadedText)).toBe(store);
+      if (text !== null) expect(storage.getItem(DATA_KEY)).toBe(text);
+    }
+    const full = new MemoryStorage();
+    full.failWrites = true;
+    const { store, loadedText } = load(full);
+    expect(loadedText).toBeNull();
+    expect(catchUpOtherTab(full, store, loadedText)).toBe(store);
+  });
+
+  it('does not take this tab’s own change, made before it listened, for another tab’s', () => {
+    const storage = holding(olderAppData(withProfile));
+    const { store, loadedText } = load(storage);
+    const { store: next, written } = apply(storage, store, saveInvoice);
+    const changed = settleAppStore(next, written);
+    expect(written).toBe('saved');
+    expect(catchUpOtherTab(storage, changed, loadedText)).toBe(changed);
+  });
+
+  it('takes over what a current tab wrote between loading and listening, without writing it back', () => {
+    const storage = holding(JSON.stringify(withInvoice));
+    const { store, loadedText } = load(storage);
+    const other = JSON.stringify({ ...withInvoice, supplier: fixtureProfile() });
+    storage.setItem(DATA_KEY, other);
+    storage.failWrites = true;
+    const next = catchUpOtherTab(storage, store, loadedText);
+    expect(next).toMatchObject({
+      data: { ...withInvoice, supplier: fixtureProfile() },
+      dataReplaced: true,
+      olderTab: null,
+      lastWriteFailed: false,
+    });
+    expect(storage.getItem(DATA_KEY)).toBe(other);
+    // Caught up: a second look changes nothing more.
+    expect(catchUpOtherTab(storage, next, loadedText)).toBe(next);
+  });
+
+  it('takes over what an older Invoo saved meanwhile while the stored data is still version 2', () => {
+    const storage = holding(olderAppData(withInvoice));
+    const { store, loadedText } = load(storage);
+    const older = olderAppData({ ...withInvoice, supplier: fixtureProfile() });
+    storage.setItem(DATA_KEY, older);
+    const next = catchUpOtherTab(storage, store, loadedText);
+    expect(next).toMatchObject({
+      data: { ...withInvoice, supplier: fixtureProfile() },
+      olderTab: 'followed',
+      storedCurrent: false,
+    });
+    expect(storage.getItem(DATA_KEY)).toBe(older);
+  });
+
+  it('undoes what an older Invoo wrote meanwhile over the current data that was loaded', () => {
+    const storage = holding(JSON.stringify(withInvoice));
+    const { store, loadedText } = load(storage);
+    storage.setItem(DATA_KEY, olderAppData(withProfile));
+    const next = catchUpOtherTab(storage, store, loadedText);
+    expect(next.data).toBe(store.data);
+    expect(next).toMatchObject({ olderTab: 'overwrote', lastWriteFailed: false });
+    expect(loadAppData(storage).data).toEqual(withInvoice);
+    expect(catchUpOtherTab(storage, next, loadedText)).toBe(next);
+  });
+
+  it('follows a write to a key that was still empty after loading', () => {
+    const storage = new MemoryStorage();
+    storage.failWrites = true;
+    const { store, loadedText } = load(storage);
+    storage.failWrites = false;
+    const other = JSON.stringify(withProfile);
+    storage.setItem(DATA_KEY, other);
+    expect(catchUpOtherTab(storage, store, loadedText)).toMatchObject({ data: withProfile, storedCurrent: true });
+    expect(storage.getItem(DATA_KEY)).toBe(other);
+  });
+
+  it('ignores unreadable text written meanwhile, and a key that was removed', () => {
+    const storage = holding(JSON.stringify(withInvoice));
+    const { store, loadedText } = load(storage);
+    storage.setItem(DATA_KEY, CORRUPT);
+    expect(catchUpOtherTab(storage, store, loadedText)).toBe(store);
+    expect(storage.getItem(DATA_KEY)).toBe(CORRUPT);
+    storage.removeItem(DATA_KEY);
+    expect(catchUpOtherTab(storage, store, loadedText)).toBe(store);
+    expect(storage.getItem(DATA_KEY)).toBeNull();
   });
 });

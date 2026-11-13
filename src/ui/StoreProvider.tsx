@@ -11,6 +11,7 @@ import {
 } from '../storage/appDataStorage';
 import {
   appStoreReducer,
+  catchUpOtherTab,
   followOtherTab,
   openAppStore,
   settleAppStore,
@@ -89,19 +90,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Another tab wrote the data: it is taken over, or undone when an older Invoo overwrote current data (see
-  // followOtherTab).
+  // followOtherTab). A write made between loading and listening raised no event, so the key is read once more.
   useEffect(() => {
     if (!persistent) return;
-    const onStorage = (event: StorageEvent) => {
-      if (event.storageArea !== storage || event.key !== DATA_KEY || event.newValue === null) return;
-      const next = followOtherTab(storage, current.current, event.newValue, event.oldValue);
+    const follow = (next: AppStore) => {
       if (next === current.current) return;
       current.current = next;
       setStore(next);
     };
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea !== storage || event.key !== DATA_KEY || event.newValue === null) return;
+      follow(followOtherTab(storage, current.current, event.newValue, event.oldValue));
+    };
     window.addEventListener('storage', onStorage);
+    follow(catchUpOtherTab(storage, current.current, loaded.storedText));
     return () => window.removeEventListener('storage', onStorage);
-  }, [persistent, storage]);
+  }, [persistent, storage, loaded]);
 
   const removeLegacy = useCallback(() => {
     if (!removeLegacyData(storage) || !saveAppData(storage, current.current.data)) return false;

@@ -11,6 +11,7 @@ import {
   LEGACY_DRAFT_KEY,
   loadAppData,
   loadDraft,
+  readDataText,
   readStoredChange,
   removeLegacyData,
   saveAppData,
@@ -180,6 +181,35 @@ describe('stored data from before version 3', () => {
     const full = new MemoryStorage();
     full.failWrites = true;
     expect(loadAppData(full).storedCurrent).toBe(false);
+  });
+
+  it('reports the text the data key holds once loading is done', () => {
+    const fresh = new MemoryStorage();
+    expect(readDataText(fresh)).toBeNull();
+    expect(loadAppData(fresh).storedText).toBe(JSON.stringify(emptyAppData()));
+    expect(readDataText(fresh)).toBe(JSON.stringify(emptyAppData()));
+
+    const older = new MemoryStorage();
+    const v2 = olderAppData({ ...emptyAppData(), invoices: [fixtureInvoice()] });
+    older.setItem(DATA_KEY, v2);
+    expect(loadAppData(older).storedText).toBe(v2);
+
+    const corrupt = new MemoryStorage();
+    corrupt.setItem(DATA_KEY, CORRUPT);
+    expect(loadAppData(corrupt).storedText).toBe(CORRUPT);
+
+    const legacy = new MemoryStorage();
+    legacy.setItem(LEGACY_DATA_KEY, v1Data);
+    expect(loadAppData(legacy).storedText).toBe(legacy.getItem(DATA_KEY));
+    expect(legacy.getItem(DATA_KEY)).not.toBeNull();
+
+    // Nothing is under the data key when the Invokit data is unreadable or the first write is refused.
+    const brokenLegacy = new MemoryStorage();
+    brokenLegacy.setItem(LEGACY_DATA_KEY, CORRUPT);
+    expect(loadAppData(brokenLegacy)).toMatchObject({ recovered: true, unreadableText: CORRUPT, storedText: null });
+    const full = new MemoryStorage();
+    full.failWrites = true;
+    expect(loadAppData(full).storedText).toBeNull();
   });
 });
 

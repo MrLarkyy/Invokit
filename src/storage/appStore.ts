@@ -1,5 +1,5 @@
 import type { AppData } from './appData';
-import { readStoredChange, saveAppData, type LoadedAppData } from './appDataStorage';
+import { readDataText, readStoredChange, saveAppData, type LoadedAppData } from './appDataStorage';
 import { appReducer, type AppAction } from './appReducer';
 
 /** The data of this page visit, and whether its changes go to the browser storage. */
@@ -12,7 +12,7 @@ export interface AppStore {
   canWrite: boolean;
   /** A restored backup or another tab's data replaced what this visit started with. */
   dataReplaced: boolean;
-  /** The last attempt to store a change was refused by the browser. */
+  /** The browser refused the last attempt to store this tab's data, and no other tab's data replaced it since. */
   lastWriteFailed: boolean;
   /**
    * The browser storage held data in the current schema during this visit: loaded so, written here, or taken over
@@ -49,9 +49,14 @@ export function appStoreReducer(store: AppStore, action: AppStoreAction): AppSto
   // A confirmed restore replaces the unreadable data; a reload means another tab already replaced it.
   const canWrite = store.canWrite || action.type === 'backup/restore' || action.type === 'data/reload';
   const dataReplaced = store.dataReplaced || action.type === 'backup/restore' || action.type === 'data/reload';
-  return data === store.data && canWrite === store.canWrite && dataReplaced === store.dataReplaced
+  // Reloaded data is what the storage holds: a write refused earlier leaves nothing unsaved behind.
+  const lastWriteFailed = store.lastWriteFailed && action.type !== 'data/reload';
+  return data === store.data &&
+    canWrite === store.canWrite &&
+    dataReplaced === store.dataReplaced &&
+    lastWriteFailed === store.lastWriteFailed
     ? store
-    : { ...store, data, canWrite, dataReplaced };
+    : { ...store, data, canWrite, dataReplaced, lastWriteFailed };
 }
 
 /**
@@ -97,6 +102,17 @@ export function followOtherTab(storage: Storage, store: AppStore, text: string, 
   const noted: AppStore = { ...kept, storedCurrent: true, olderTab: 'overwrote' };
   if (!noted.canWrite) return noted;
   return settleAppStore(noted, saveAppData(storage, noted.data) ? 'saved' : 'failed');
+}
+
+/**
+ * Catches up with the data key once the page listens to it: what another tab wrote after `loadedText` was read
+ * raised no event here. The key's text is followed like such an event, unless it is still that text or this tab's
+ * own data (a change made before listening).
+ */
+export function catchUpOtherTab(storage: Storage, store: AppStore, loadedText: string | null): AppStore {
+  const text = readDataText(storage);
+  if (text === null || text === loadedText || text === JSON.stringify(store.data)) return store;
+  return followOtherTab(storage, store, text, loadedText);
 }
 
 /**
