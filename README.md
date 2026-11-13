@@ -28,7 +28,7 @@ nemá server, nic, co vyplníš, neodchází z tvého zařízení, a nenačítá
 
 ## Data a záloha
 
-Faktury, odběratelé, položky a tvoje údaje se ukládají do `localStorage` tohoto prohlížeče (`invoo.data.v2`).
+Faktury, odběratelé, položky a tvoje údaje se ukládají do `localStorage` tohoto prohlížeče (`invoo.data.v3`).
 Smazáním dat prohlížeče zmizí, proto je v nastavení **Stáhnout zálohu** (JSON soubor `invoo-zaloha-RRRR-MM-DD.json`) a
 **Obnovit ze souboru** (i v jiném prohlížeči nebo počítači). Obnova soubor nejdřív zkontroluje (velikost do 10 MB,
 počty, typy a rozsahy všech údajů); neplatný soubor odmítne s českou hláškou a stávající data nechá být.
@@ -37,6 +37,20 @@ Záloha má verzi 3: každá faktura i nastavení nesou svůj vzhled (šablona, 
 jednou, i když je používá víc faktur (nejvýš 20 log). Loga se v záloze kontrolují stejně přísně jako ostatní údaje:
 jen PNG, JPEG nebo WebP, nejvýš 50 000 znaků, žádné SVG ani odkazy jinam. Zálohy a uložená data verze 2 (a 1) se
 načtou dál a dostanou vzhled Invoo bez barvy a loga, s patičkou.
+
+Data verze 3 mají vlastní klíč `invoo.data.v3` (rozepsaná faktura `invoo.draft.v3`). Dřívější data z klíče
+`invoo.data.v2` se jen přečtou; při první uložené změně se zapíšou pod nový klíč a teprve potom se starý klíč
+odstraní (nevejdou-li se obě kopie vedle sebe, uvolní starý klíč místo předem a při neúspěchu se vrátí beze změny).
+Pod starý klíč už Invoo nic nového nezapisuje.
+
+Starší verze Invoo otevřená v jiné záložce novým datům neublíží: verzi 3 nepřečte a ukládá dál jen pod svůj starý
+klíč. Dokud tady nic neuložíš, její změny se přebírají. Potom už její data zůstávají stranou a Invoo na ně upozorní:
+nabídne je ke stažení (`invoo-starsi-zalozka-RRRR-MM-DD.json`, jde obnovit jako záloha, obnova ale nahradí současná
+data) a po stažení k odstranění z prohlížeče. Nic se neslučuje ani nepřepisuje. Stejně se zachová tahle verze, až
+jednou najde data novější verze: nechá je být, přestane ukládat a požádá o obnovení stránky.
+
+Mezi záložkami stejné verze se změny přebírají samy; před každým uložením si záložka nejdřív načte, co mezitím
+uložila jiná, aby to nepřepsala.
 
 Přechod z Invokitu (dřívější název aplikace): data ze starého klíče `invokit.data.v1` i zálohy verze 1 se při prvním
 spuštění nebo při obnově automaticky převedou na aktuální verzi se stejnými částkami; starý klíč zůstává v prohlížeči

@@ -62,7 +62,8 @@ function ibanPreview(profile: SupplierProfile): string {
 }
 
 export function Settings() {
-  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite, lastWriteFailed, legacyBlocking } = useStore();
+  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite, lastWriteFailed, legacyBlocking, newer } =
+    useStore();
   const toast = useToast();
   const storing = persistent && canWrite && !lastWriteFailed && !legacyBlocking;
   const [saved] = useState(() => savedProfile(data) ?? emptyProfile());
@@ -492,7 +493,7 @@ export function Settings() {
                   Soubor <strong>{pending.fileName}</strong>: {czechPlural(pending.data.invoices.length, INVOICES)},{' '}
                   {czechPlural(pending.data.customers.length, CUSTOMERS)}. Obnovit data? Přepíše to všechno, co je teď
                   uložené.
-                  {canWrite ? null : ' Přepíše to i původní nečitelná data: nejdřív si je nahoře stáhni.'}
+                  {canWrite || newer ? null : ' Přepíše to i původní nečitelná data: nejdřív si je nahoře stáhni.'}
                 </p>
                 <div className="restore__actions">
                   <button type="button" className="btn btn--primary btn--sm" onClick={confirmRestore}>

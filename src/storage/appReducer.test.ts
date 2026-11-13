@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { defaultAppearance } from '../domain/invoiceAppearance';
 import { logoUrl } from '../domain/logos';
 import { createBlankInvoice } from '../domain/newInvoice';
-import { FIXTURE_LOGO, fixtureInvoice, fixtureProfile } from '../test/invoiceFixture';
+import { fullLogoData, printedLogos } from '../test/fullLogoData';
+import { FIXTURE_LOGO, fixtureInvoice, fixtureLogo, fixtureProfile } from '../test/invoiceFixture';
 import { emptyAppData, type AppData } from './appData';
 import { parseAppData } from './appDataSchema';
-import { appReducer } from './appReducer';
+import { appReducer, type AppAction } from './appReducer';
 
 const saved = (): AppData =>
   appReducer(emptyAppData(), { type: 'invoice/save', invoice: fixtureInvoice(), now: '2026-09-02T10:00:00Z' });
@@ -115,5 +116,67 @@ describe('a logo saved next to a restored high id', () => {
     const saved = appReducer(restored, { type: 'supplier/save', supplier: fixtureProfile(), logo: other });
     expect(saved.supplier?.appearance.logoId).toBe('logo-1');
     expect(parseAppData(JSON.stringify(saved))).toEqual(saved);
+  });
+});
+
+describe('logos the invoices print, with every logo slot taken', () => {
+  const profileLogo = (data: AppData) => logoUrl(data.logos, data.supplier?.appearance.logoId ?? null);
+
+  it('refuses one logo too many without changing anything', () => {
+    const full = fullLogoData();
+    const refused = appReducer(full, { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(21) });
+    expect(refused).toBe(full);
+  });
+
+  it('keeps every logo an invoice or the profile prints through saves, refusals and removals', () => {
+    const full = fullLogoData();
+    const printed = printedLogos(full);
+    const blank = createBlankInvoice(full, '2026-09-02', () => 'r1');
+    const actions: AppAction[] = [
+      { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(21) },
+      { type: 'supplier/save', supplier: fixtureProfile({ email: 'fakturace@ukazka.example' }), logo: fixtureLogo(3) },
+      { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(22) },
+      { type: 'invoice/save', invoice: { ...blank, id: 'new', number: '2026-09-050' }, now: 'a' },
+      {
+        type: 'invoice/save',
+        invoice: fixtureInvoice({
+          id: 'gone',
+          number: '2026-09-051',
+          appearance: { ...defaultAppearance(), logoId: 'logo-77' },
+        }),
+        now: 'b',
+      },
+      { type: 'supplier/save', supplier: fixtureProfile(), logo: null },
+      { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(23) },
+      { type: 'invoice/setPaid', id: 'f7', paidAt: '2026-09-10' },
+      { type: 'customer/delete', customer: fixtureInvoice().customer },
+      { type: 'catalog/delete', description: 'Vývoj' },
+      { type: 'backup/exported', at: '2026-09-30' },
+    ];
+    let data = full;
+    for (const action of actions) {
+      data = appReducer(data, action);
+      expect(printedLogos(data), action.type).toMatchObject(printed);
+      expect(Object.values(printedLogos(data)), action.type).not.toContain('missing');
+      expect(data.supplier === null || data.supplier.appearance.logoId === null || profileLogo(data) !== null).toBe(
+        true,
+      );
+      expect(parseAppData(JSON.stringify(data)), action.type).toEqual(data);
+    }
+    expect(data.logos).toHaveLength(20);
+    expect(profileLogo(data)).toBeNull();
+    expect(data.invoices).toHaveLength(22);
+  });
+
+  it('frees a slot only with the last invoice that prints its logo', () => {
+    const full = fullLogoData();
+    const without = appReducer(full, { type: 'invoice/delete', id: 'f5' });
+    const others = printedLogos(full);
+    delete others.f5;
+    expect(printedLogos(without)).toEqual(others);
+    expect(without.logos).toHaveLength(19);
+    const saved = appReducer(without, { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(21) });
+    expect(printedLogos(saved)).toEqual(others);
+    expect(profileLogo(saved)).toBe(fixtureLogo(21));
   });
 });

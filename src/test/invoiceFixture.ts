@@ -8,6 +8,12 @@ import type { SupplierProfile } from '../domain/supplierProfile';
 export const FIXTURE_LOGO =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
+/** A distinct valid PNG data URL per n: the 1×1 PNG with a different filler block after its header. */
+export function fixtureLogo(n: number): string {
+  const block = n.toString(36).padStart(4, 'A').slice(-4);
+  return `${FIXTURE_LOGO.slice(0, -4)}${block}${FIXTURE_LOGO.slice(-4)}`;
+}
+
 export function fixtureItem(
   description: string,
   quantity: string,

@@ -2,7 +2,7 @@ import type { CatalogItem, Invoice, Party } from '../domain/invoice';
 import type { StoredLogo } from '../domain/logos';
 import type { SupplierProfile } from '../domain/supplierProfile';
 
-/** Everything Invoo keeps, as stored under `invoo.data.v2` and written to a backup file. */
+/** Everything Invoo keeps, as stored under `invoo.data.v3` and written to a backup file. */
 export interface AppData {
   version: 3;
   supplier: SupplierProfile | null;

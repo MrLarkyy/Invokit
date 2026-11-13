@@ -7,8 +7,8 @@ import { IconAlert, IconDownload } from './Icons';
 import { useToast } from './Toast';
 
 /**
- * Warnings about the browser storage: blocked, unreadable data, Invokit data that no longer fits, or an older Invoo
- * open in another tab.
+ * Warnings about the browser storage: blocked, unreadable data, data of a newer Invoo, an older Invoo saving in
+ * another tab, or Invokit data that no longer fits.
  */
 export function StorageNotice() {
   const {
@@ -17,8 +17,10 @@ export function StorageNotice() {
     persistent,
     canWrite,
     dataReplaced,
-    lastWriteFailed,
     olderTab,
+    newer,
+    downloadOlder,
+    dropOlder,
     loaded,
     legacyBlocking,
     removeLegacy,
@@ -26,6 +28,7 @@ export function StorageNotice() {
   const toast = useToast();
   const [backupTaken, setBackupTaken] = useState(false);
   const [originalTaken, setOriginalTaken] = useState(false);
+  const [olderTaken, setOlderTaken] = useState<string | null>(null);
 
   const downloadOriginal = () => {
     if (loaded.unreadableText === null) return;
@@ -44,6 +47,20 @@ export function StorageNotice() {
     downloadBackup({ ...data, lastBackupAt: today }, today);
     dispatch({ type: 'backup/exported', at: today });
     setBackupTaken(true);
+  };
+
+  const takeOlder = () => setOlderTaken(downloadOlder());
+
+  // Only the text that was downloaded is removed: what the older tab saved after the download stays.
+  const removeOlder = () => {
+    if (olderTaken === null) return;
+    if (!window.confirm('Odstranit data starší záložky z tohoto prohlížeče? Zůstanou jen ve staženém souboru.')) return;
+    if (dropOlder(olderTaken)) {
+      toast('Data starší záložky jsou z prohlížeče pryč.', 'happy');
+    } else {
+      setOlderTaken(null);
+      toast('Starší záložka mezitím uložila něco dalšího, nebo data nejdou odstranit. Stáhni si je znovu.');
+    }
   };
 
   const removeOld = () => {
@@ -104,10 +121,38 @@ export function StorageNotice() {
         </div>
       ) : null}
 
-      {olderTab !== null ? (
+      {newer ? (
         <div className="container banner" role="alert">
           <IconAlert size={18} />
-          <p>{olderTabNotice(olderTab, canWrite && !lastWriteFailed)}</p>
+          <p>
+            Data v tomhle prohlížeči uložila novější verze Invoo, než je v téhle záložce. Aby se nepoškodila, nic se
+            tady teď neukládá. Obnov stránku, načte se nová verze i s daty.
+          </p>
+        </div>
+      ) : null}
+
+      {olderTab !== null && !newer ? (
+        <div className="container banner" role="alert">
+          <IconAlert size={18} />
+          <div className="banner__body">
+            <p>{olderTabNotice(olderTab)}</p>
+            {olderTab === 'aside' ? (
+              <div className="banner__actions">
+                <button type="button" className="btn btn--primary btn--sm" onClick={takeOlder}>
+                  <IconDownload size={16} />
+                  Stáhnout data starší záložky
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--outline btn--sm"
+                  onClick={removeOlder}
+                  disabled={olderTaken === null}
+                >
+                  Odstranit z prohlížeče
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureInvoice } from '../test/invoiceFixture';
-import { DRAFT_KEY, saveDraft } from './appDataStorage';
+import { DRAFT_KEY, PREVIOUS_DRAFT_KEY, saveDraft } from './appDataStorage';
 import { DraftSession } from './draftSession';
 import { MemoryStorage } from './memoryStorage';
 
@@ -34,6 +34,22 @@ describe('DraftSession', () => {
     session.save(null, false);
     expect(session.load()).toBeNull();
     expect(storage.getItem(DRAFT_KEY)).toBe(before);
+  });
+
+  it('opens a draft an older Invoo left and touches its key only once this tab may write', () => {
+    const storage = new MemoryStorage();
+    const before = JSON.stringify(forCustomer('Koncept z dřívějška s.r.o.'));
+    storage.setItem(PREVIOUS_DRAFT_KEY, before);
+    const session = new DraftSession(storage);
+    expect(session.load()?.customer.name).toBe('Koncept z dřívějška s.r.o.');
+    session.save(forCustomer('Upravený odběratel s.r.o.'), false);
+    session.save(null, false);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBe(before);
+    expect(storage.getItem(DRAFT_KEY)).toBeNull();
+
+    session.save(forCustomer('Upravený odběratel s.r.o.'), true);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBeNull();
+    expect(new DraftSession(storage).load()?.customer.name).toBe('Upravený odběratel s.r.o.');
   });
 
   it('holds the draft in memory when the browser refuses the write', () => {
