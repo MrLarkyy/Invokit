@@ -126,8 +126,9 @@ export function migrateV1(v1: AppDataV1): AppData {
     version: 2,
     supplier,
     invoices,
-    customers: v1.customers.map(migrateParty),
-    items: migrateCatalog(v1.items),
+    // v1 kept these lists without a limit; the first ones (v1 sorted them by name) stay within the v2 limits.
+    customers: v1.customers.slice(0, LIMITS.customers).map(migrateParty),
+    items: migrateCatalog(v1.items).slice(0, LIMITS.catalog),
     lastBackupAt: null,
   };
 }

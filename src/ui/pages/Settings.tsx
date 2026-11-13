@@ -6,6 +6,7 @@ import { formatCzechDate } from '../../domain/dates';
 import type { CatalogItem, Party } from '../../domain/invoice';
 import { LIMITS } from '../../domain/limits';
 import { createBlankInvoice } from '../../domain/newInvoice';
+import { byDescription, byName } from '../../domain/records';
 import { emptyProfile, profileAccount, savedProfile, type SupplierProfile } from '../../domain/supplierProfile';
 import type { AppData } from '../../storage/appData';
 import { loadDraft, saveDraft } from '../../storage/appDataStorage';
@@ -47,7 +48,7 @@ function ibanPreview(profile: SupplierProfile): string {
 }
 
 export function Settings() {
-  const { data, dispatch } = useStore();
+  const { data, dispatch, storage, canWrite } = useStore();
   const toast = useToast();
   const [saved] = useState(() => savedProfile(data) ?? emptyProfile());
   const [form, setForm] = useState<SupplierProfile>(saved);
@@ -101,8 +102,8 @@ export function Settings() {
   };
 
   const newInvoiceFor = (customer: Party) => {
-    const draft = loadDraft(window.localStorage) ?? createBlankInvoice(data, todayIso(), newRowId);
-    saveDraft(window.localStorage, { ...draft, customer: { ...customer } });
+    const draft = loadDraft(storage) ?? createBlankInvoice(data, todayIso(), newRowId);
+    if (canWrite) saveDraft(storage, { ...draft, customer: { ...customer } });
     navigate({ name: 'nova' });
   };
 
@@ -304,8 +305,8 @@ export function Settings() {
           </div>
 
           <SavedRecords
-            customers={data.customers}
-            items={data.items}
+            customers={[...data.customers].sort(byName)}
+            items={[...data.items].sort(byDescription)}
             onNewInvoice={newInvoiceFor}
             onDeleteCustomer={deleteCustomer}
             onDeleteItem={deleteItem}
@@ -334,7 +335,7 @@ export function Settings() {
             <input
               ref={fileInput}
               id="restore-file"
-              className="visually-hidden"
+              className="visually-hidden file-input"
               type="file"
               accept="application/json,.json"
               onChange={(event) => void pickFile(event.target.files?.[0])}

@@ -1,8 +1,7 @@
 import { getStatus } from '../../domain/invoiceStatus';
 import { computeTotals } from '../../domain/invoiceTotals';
 import { formatCzk } from '../../domain/money';
-import { duplicateInvoice } from '../../domain/newInvoice';
-import { newRowId, todayIso } from '../clock';
+import { todayIso } from '../clock';
 import { AdSlot } from '../components/AdSlot';
 import { Eyes } from '../components/Eyes';
 import { IconArrowLeft, IconCheck, IconCopy, IconDownload, IconPencil, IconTrash, IconUndo } from '../components/Icons';
@@ -13,11 +12,14 @@ import { useToast } from '../components/Toast';
 import { navigate, toHash } from '../router';
 import { useStore } from '../StoreProvider';
 import { dueLabel } from '../texts';
+import { printInvoice } from '../printInvoice';
 import { useDocumentTitle } from '../useDocumentTitle';
+import { useDuplicateInvoice } from '../useDuplicateInvoice';
 
 export function InvoiceDetail({ id }: { id: string }) {
   const { data, dispatch } = useStore();
   const toast = useToast();
+  const duplicateOf = useDuplicateInvoice();
   const invoice = data.invoices.find((item) => item.id === id);
   useDocumentTitle(invoice ? `Faktura ${invoice.number}` : 'Faktura nenalezena');
 
@@ -35,13 +37,6 @@ export function InvoiceDetail({ id }: { id: string }) {
       dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
       toast(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, 'happy');
     }
-  };
-
-  const duplicate = () => {
-    const copy = duplicateInvoice(invoice, data, today, newRowId);
-    dispatch({ type: 'invoice/save', invoice: copy, now: new Date().toISOString() });
-    toast(`Kopie je uložená jako ${copy.number}. Můžeš ji rovnou upravit.`);
-    navigate({ name: 'upravit', id: copy.id });
   };
 
   const remove = () => {
@@ -87,7 +82,7 @@ export function InvoiceDetail({ id }: { id: string }) {
               <button
                 type="button"
                 className="btn btn--outline"
-                onClick={() => window.print()}
+                onClick={() => printInvoice(invoice.number)}
                 title="Otevře tisk, kde zvolíš Uložit jako PDF."
               >
                 <IconDownload size={18} />
@@ -97,7 +92,7 @@ export function InvoiceDetail({ id }: { id: string }) {
                 <IconPencil size={18} />
                 Upravit
               </a>
-              <button type="button" className="btn btn--outline" onClick={duplicate}>
+              <button type="button" className="btn btn--outline" onClick={() => duplicateOf(invoice)}>
                 <IconCopy size={18} />
                 Duplikovat
               </button>

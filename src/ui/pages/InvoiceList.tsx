@@ -4,18 +4,18 @@ import type { Invoice } from '../../domain/invoice';
 import { getStatus, type InvoiceStatus } from '../../domain/invoiceStatus';
 import { computeTotals } from '../../domain/invoiceTotals';
 import { formatCzk, formatCzkRound } from '../../domain/money';
-import { duplicateInvoice } from '../../domain/newInvoice';
-import { newRowId, todayIso } from '../clock';
+import { todayIso } from '../clock';
 import { czechPlural, INVOICES } from '../czechPlural';
 import { Eyes } from '../components/Eyes';
 import { IconCheck, IconCopy, IconEye, IconPencil, IconSearch, IconUndo } from '../components/Icons';
 import { StatsPanel } from '../components/StatsPanel';
 import { StatusChip } from '../components/StatusChip';
 import { useToast } from '../components/Toast';
-import { navigate, toHash } from '../router';
+import { toHash } from '../router';
 import { useStore } from '../StoreProvider';
 import { dueLabel } from '../texts';
 import { useDocumentTitle } from '../useDocumentTitle';
+import { useDuplicateInvoice } from '../useDuplicateInvoice';
 
 type Filter = 'all' | InvoiceStatus;
 
@@ -29,6 +29,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 export function InvoiceList() {
   const { data, dispatch } = useStore();
   const toast = useToast();
+  const duplicate = useDuplicateInvoice();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const today = todayIso();
@@ -61,13 +62,6 @@ export function InvoiceList() {
         row.invoice.number.toLowerCase().includes(needle) ||
         row.invoice.customer.name.toLowerCase().includes(needle)),
   );
-
-  const duplicate = (invoice: Invoice) => {
-    const copy = duplicateInvoice(invoice, data, today, newRowId);
-    dispatch({ type: 'invoice/save', invoice: copy, now: new Date().toISOString() });
-    toast(`Kopie je uložená jako ${copy.number}. Můžeš ji rovnou upravit.`);
-    navigate({ name: 'upravit', id: copy.id });
-  };
 
   const togglePaid = (invoice: Invoice) => {
     if (invoice.paid) {

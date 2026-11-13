@@ -8,6 +8,11 @@ import { formatCzk, formatQuantity } from '../../domain/money';
 import { Eyes } from './Eyes';
 import { QrCode } from './QrCode';
 
+/** A hint for a missing value: on screen only, a printed invoice never carries it. */
+function Placeholder({ text }: { text: string }) {
+  return <span className="screen-only">{text}</span>;
+}
+
 /**
  * The A4 invoice: live preview in the editor, the detail page and print (see @media print in app.css).
  * It reads only the invoice and its own supplier snapshot, never the current profile.
@@ -32,14 +37,14 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
           </div>
           <div className="paper__number">
             <span>Číslo dokladu</span>
-            <strong>{invoice.number || '…'}</strong>
+            <strong>{invoice.number || <Placeholder text="…" />}</strong>
           </div>
         </header>
 
         <section className="paper__parties">
           <div className={supplier.party.name ? '' : 'is-empty'}>
             <h3>Dodavatel</h3>
-            <strong>{supplier.party.name || 'Doplň své údaje v nastavení'}</strong>
+            <strong>{supplier.party.name || <Placeholder text="Doplň své údaje v nastavení" />}</strong>
             {supplier.party.street ? <span>{supplier.party.street}</span> : null}
             {zipCity(supplier.party.zip, supplier.party.city) ? (
               <span>{zipCity(supplier.party.zip, supplier.party.city)}</span>
@@ -50,9 +55,11 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
           </div>
           <div className={hasCustomer ? '' : 'is-empty'}>
             <h3>Odběratel</h3>
-            <strong>{hasCustomer ? customer.name : 'Název odběratele'}</strong>
-            <span>{customer.street || (hasCustomer ? '' : 'Ulice a číslo')}</span>
-            <span>{zipCity(customer.zip, customer.city) || (hasCustomer ? '' : 'PSČ a město')}</span>
+            <strong>{hasCustomer ? customer.name : <Placeholder text="Název odběratele" />}</strong>
+            <span>{customer.street || (hasCustomer ? '' : <Placeholder text="Ulice a číslo" />)}</span>
+            <span>
+              {zipCity(customer.zip, customer.city) || (hasCustomer ? '' : <Placeholder text="PSČ a město" />)}
+            </span>
             {customer.ico ? <span>IČO {customer.ico}</span> : null}
             {customer.dic ? <span>DIČ {customer.dic}</span> : null}
           </div>
@@ -75,11 +82,11 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
           </div>
           <div>
             <span>Variabilní symbol</span>
-            <strong>{invoice.variableSymbol || '…'}</strong>
+            <strong>{invoice.variableSymbol || <Placeholder text="…" />}</strong>
           </div>
           <div>
             <span>Účet</span>
-            <strong>{supplier.bankAccount || 'doplň v nastavení'}</strong>
+            <strong>{supplier.bankAccount || <Placeholder text="doplň v nastavení" />}</strong>
           </div>
         </section>
 
@@ -95,13 +102,13 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <tr className="is-empty">
+              <tr className="is-empty screen-only">
                 <td colSpan={payer ? 5 : 4}>Tady se objeví položky faktury.</td>
               </tr>
             ) : (
               items.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.description || 'Položka bez názvu'}</td>
+                  <td>{item.description || <Placeholder text="Položka bez názvu" />}</td>
                   <td className="num">
                     {formatQuantity(item.quantity)} {item.unit}
                   </td>
@@ -164,7 +171,8 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
               <div>
                 <strong>{invoice.paymentMethod || 'Platba převodem'}</strong>
                 <span>
-                  Účet {supplier.bankAccount || '…'}, variabilní symbol {invoice.variableSymbol || '…'}
+                  Účet {supplier.bankAccount || <Placeholder text="…" />}, variabilní symbol{' '}
+                  {invoice.variableSymbol || <Placeholder text="…" />}
                 </span>
                 {iban ? <span className="paper__iban">IBAN {formatIban(iban)}</span> : null}
                 {payment.problem ? <span className="paper__qr-why">{payment.problem}</span> : null}

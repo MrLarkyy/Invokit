@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fixtureInvoice, fixtureItem, fixtureProfile } from '../test/invoiceFixture';
 import { emptyAppData, type AppData } from './appData';
 import { parseAppData, parseDraft } from './appDataSchema';
+import { backupText } from './backupFile';
 
 const NOT_INVOO = 'Soubor není záloha Invoo.';
 
@@ -46,8 +47,18 @@ describe('parseAppData', () => {
     expect(() => parseAppData(JSON.stringify({ ...emptyAppData(), version: '2' }))).toThrow(NOT_INVOO);
   });
 
-  it('rejects a file over 5 MB before parsing it', () => {
-    expect(() => parseAppData(' '.repeat(5 * 1024 * 1024 + 1))).toThrow('Soubor je příliš velký (nejvýš 5 MB).');
+  it('rejects a file over 10 MB before parsing it', () => {
+    expect(() => parseAppData(' '.repeat(10 * 1024 * 1024 + 1))).toThrow('Soubor je příliš velký (nejvýš 10 MB).');
+  });
+
+  it('restores a compact backup of as much data as localStorage holds (about 5 million characters)', () => {
+    const invoices = Array.from({ length: 2_700 }, (_, n) =>
+      fixtureInvoice({ id: `f${n}`, number: `2026-${n}`, note: 'Poznámka '.repeat(220) }),
+    );
+    const text = backupText({ ...emptyAppData(), invoices });
+    expect(text.length).toBeGreaterThan(5_242_880);
+    expect(text).not.toContain('\n');
+    expect(parseAppData(text).invoices).toHaveLength(2_700);
   });
 
   it('rejects counts over the limits', () => {
@@ -114,5 +125,13 @@ describe('parseDraft', () => {
     expect(parseDraft(JSON.stringify(draft))).toEqual(draft);
     expect(parseDraft('{')).toBeNull();
     expect(parseDraft('{"id":"x"}')).toBeNull();
+  });
+});
+
+describe('parseDraft with an amount still being typed', () => {
+  it('keeps a draft whose line is over the limit (the editor refuses to save it)', () => {
+    const draft = fixtureInvoice({ items: [fixtureItem('Velká', '1000000', 100_000_000_000)] });
+    expect(parseDraft(JSON.stringify(draft))).toEqual(draft);
+    expect(() => parseAppData(JSON.stringify({ ...emptyAppData(), invoices: [draft] }))).toThrow('částka');
   });
 });

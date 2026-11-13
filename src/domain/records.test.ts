@@ -3,7 +3,9 @@ import { emptyAppData, type AppData } from '../storage/appData';
 import { fixtureInvoice, fixtureItem as item, fixtureProfile } from '../test/invoiceFixture';
 import { computeTotals } from './invoiceTotals';
 import { createBlankInvoice } from './newInvoice';
-import { deleteCatalogItem, deleteCustomer, deleteInvoice, saveInvoice, setPaid } from './records';
+import { parseAppData } from '../storage/appDataSchema';
+import { LIMITS } from './limits';
+import { deleteCatalogItem, deleteCustomer, deleteInvoice, saveInvoice, saveProblem, setPaid } from './records';
 
 const invoice = (number: string, customer = 'Odběratel Test a.s.', ico = '27410587') =>
   fixtureInvoice({
@@ -93,5 +95,41 @@ describe('setPaid', () => {
     expect(data.invoices[0]).toMatchObject({ paid: true, paidAt: '2026-09-10' });
     data = setPaid(data, '2026-09-001', null);
     expect(data.invoices[0]).toMatchObject({ paid: false, paidAt: null });
+  });
+});
+
+describe('limits of the saved lists', () => {
+  const party = (n: number) => ({ name: `Firma ${n}`, street: '', city: '', zip: '', ico: '', dic: '' });
+
+  it('keeps the most recently used customers and items up to the limit', () => {
+    const full: AppData = {
+      ...emptyAppData(),
+      customers: Array.from({ length: LIMITS.customers }, (_, n) => party(n)),
+      items: Array.from({ length: LIMITS.catalog }, (_, n) => ({
+        description: `Položka ${n}`,
+        unit: 'ks',
+        unitPriceCents: 100,
+        vatRate: 0 as const,
+      })),
+    };
+    const data = saveInvoice(full, invoice('2026-09-001', 'Nová firma', ''), 'a');
+    expect(data.customers).toHaveLength(LIMITS.customers);
+    expect(data.customers[0]?.name).toBe('Nová firma');
+    expect(data.customers.some((c) => c.name === `Firma ${LIMITS.customers - 1}`)).toBe(false);
+    expect(data.items).toHaveLength(LIMITS.catalog);
+    expect(data.items[0]?.description).toBe('Vývoj');
+    expect(() => parseAppData(JSON.stringify(data))).not.toThrow();
+  });
+
+  it('refuses the invoice over 10 000 in Czech, and data at the limit loads back', () => {
+    const invoices = Array.from({ length: LIMITS.invoices }, (_, n) =>
+      fixtureInvoice({ id: `f${n}`, number: `F${n}`, items: [item('x', '1', 100)] }),
+    );
+    const full: AppData = { ...emptyAppData(), invoices };
+    const next = invoice('2026-09-001');
+    expect(saveProblem(full, next)).toBe('Invoo pojme nejvýš 10 000 faktur. Stáhni si zálohu a starší faktury smaž.');
+    expect(() => saveInvoice(full, next, 'a')).toThrow('nejvýš 10 000 faktur');
+    expect(saveProblem(full, { ...invoices[0]!, note: 'úprava' })).toBeNull();
+    expect(parseAppData(JSON.stringify(full)).invoices).toHaveLength(LIMITS.invoices);
   });
 });

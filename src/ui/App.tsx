@@ -27,7 +27,7 @@ function Page({ route }: { route: Route }) {
 }
 
 function Routed() {
-  const { data, recovered } = useStore();
+  const { data } = useStore();
   const route = useHashRoute() ?? startRoute(data);
   const routeKey = 'id' in route ? `${route.name}-${route.id}` : route.name;
 
@@ -36,7 +36,7 @@ function Routed() {
   }, [routeKey]);
 
   return (
-    <Shell route={route} recovered={recovered}>
+    <Shell route={route}>
       <Page route={route} />
     </Shell>
   );

@@ -1,7 +1,7 @@
 import { isIsoDate } from '../domain/dates';
 import type { CatalogItem, Invoice, InvoiceItem, Party, SupplierSnapshot, VatRate } from '../domain/invoice';
 import { itemTotalCents } from '../domain/invoiceTotals';
-import { LIMITS } from '../domain/limits';
+import { FILE_TOO_LARGE, LIMITS } from '../domain/limits';
 import { parseQuantity } from '../domain/money';
 import type { SupplierProfile } from '../domain/supplierProfile';
 import type { AppData } from './appData';
@@ -86,7 +86,7 @@ function readQuantity(record: JsonRecord, path: string): string {
   return value;
 }
 
-function readItem(value: unknown, path: string): InvoiceItem {
+function readItem(value: unknown, path: string, checkLine: boolean): InvoiceItem {
   const r = asRecord(value, path);
   const item: InvoiceItem = {
     id: matching(r, 'id', path, ID),
@@ -99,11 +99,12 @@ function readItem(value: unknown, path: string): InvoiceItem {
   if (own(r, 'legacyLineCents') !== undefined) {
     item.legacyLineCents = readInteger(r, 'legacyLineCents', path, LIMITS.lineCents);
   }
-  if (Math.abs(itemTotalCents(item)) > LIMITS.lineCents) return invalidData(`${path}, částka`);
+  if (checkLine && Math.abs(itemTotalCents(item)) > LIMITS.lineCents) return invalidData(`${path}, částka`);
   return item;
 }
 
-function readInvoice(value: unknown, path: string): Invoice {
+// A draft may hold a line over the limit while it is typed; the editor refuses to save it, the draft still loads.
+function readInvoice(value: unknown, path: string, isDraft = false): Invoice {
   const r = asRecord(value, path);
   const items = readArray(r, 'items', path, LIMITS.itemsPerInvoice, `${path} má příliš mnoho položek.`);
   return {
@@ -115,7 +116,7 @@ function readInvoice(value: unknown, path: string): Invoice {
     variableSymbol: matching(r, 'variableSymbol', path, /^\d{0,10}$/),
     supplier: readSnapshot(own(r, 'supplier'), `${path}, dodavatel`),
     customer: readParty(own(r, 'customer'), `${path}, odběratel`),
-    items: items.map((item, i) => readItem(item, `${path}, položka ${i + 1}`)),
+    items: items.map((item, i) => readItem(item, `${path}, položka ${i + 1}`, !isDraft)),
     note: readString(r, 'note', path, LIMITS.note),
     paymentMethod: readString(r, 'paymentMethod', path, LIMITS.text),
     showQr: readBoolean(r, 'showQr', path),
@@ -163,7 +164,7 @@ function readAppDataV2(value: unknown): AppData {
 }
 
 function parseJson(text: string): unknown {
-  if (text.length > LIMITS.fileBytes) throw new Error('Soubor je příliš velký (nejvýš 5 MB).');
+  if (text.length > LIMITS.fileBytes) throw new Error(FILE_TOO_LARGE);
   try {
     // A byte order mark, as some editors save JSON, is not part of the data.
     return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text) as unknown;
@@ -188,7 +189,7 @@ export function parseAppData(text: string): AppData {
 /** The stored new-invoice draft, or null when it is missing or not valid. */
 export function parseDraft(text: string): Invoice | null {
   try {
-    return readInvoice(parseJson(text), 'koncept');
+    return readInvoice(parseJson(text), 'koncept', true);
   } catch {
     return null;
   }

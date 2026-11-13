@@ -1835,6 +1835,46 @@ select.input {
   font-weight: 700;
 }
 
+.banner__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notice {
+  padding: 14px 18px;
+  border-radius: var(--r-m);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.notice--error,
+.items__sum--error {
+  outline: 3px solid var(--danger-ink);
+  outline-offset: 2px;
+}
+
+.form-problem:not(:empty) {
+  padding: 14px 18px;
+  border-radius: var(--r-m);
+  background: var(--danger-ink);
+  color: #fff;
+  font-weight: 800;
+}
+
+/* The restore file input is visually hidden; its label shows where keyboard focus is. */
+.file-input:focus-visible + .btn {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* =========================================================================
    Responzivita
    ========================================================================= */
@@ -2194,9 +2234,10 @@ select.input {
    Tisk: na papír jde jen faktura, nic dalšího.
    ========================================================================= */
 @media print {
+  /* The page margin comes from here (or the print dialog); the paper itself adds none and has no fixed size. */
   @page {
     size: A4;
-    margin: 0;
+    margin: 10mm 12mm;
   }
 
   html,
@@ -2244,8 +2285,8 @@ select.input {
   }
 
   .paper {
-    width: 210mm;
-    min-height: 296mm;
+    width: auto;
+    min-height: 0;
     border-radius: 0;
     box-shadow: none;
     font-size: 2.646mm;
@@ -2260,18 +2301,26 @@ select.input {
   .saved,
   .stats-panel,
   .paper__qr-why,
-  .editor__save {
+  .editor__save,
+  .form-problem,
+  .notice,
+  .screen-only {
     display: none !important;
   }
 
   .paper {
     gap: 1em;
-    padding: 11mm 13mm 9mm;
+    padding: 0;
     font-size: 2.4mm;
   }
 
   .paper__items td {
     padding: 0.2em 0;
+  }
+
+  /* A printed page is as narrow as a phone: drop the room the mobile layout keeps for the tab bar. */
+  .shell--app .main {
+    padding: 0;
   }
 
   /* QR Platba asks for at least 25 mm on paper. */

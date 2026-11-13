@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyAppData } from '../storage/appData';
 import { fixtureInvoice, fixtureProfile } from '../test/invoiceFixture';
-import { createBlankInvoice, duplicateInvoice } from './newInvoice';
+import { createBlankInvoice, duplicateInvoice, refreshDraft } from './newInvoice';
 import { saveInvoice } from './records';
 import { profileFromSnapshot, savedProfile, snapshotOf } from './supplierProfile';
 
@@ -63,5 +63,24 @@ describe('new invoices', () => {
     expect(copy.items[0]?.legacyLineCents).toBeUndefined();
     expect(copy.items[0]?.id).not.toBe(source.items[0]?.id);
     expect(copy.supplier).toEqual(source.supplier);
+  });
+});
+
+describe('refreshDraft', () => {
+  const saved = fixtureInvoice({ id: '2026-09-001', number: '2026-09-001' });
+
+  it('renumbers a draft whose number was used since, with the automatic variable symbol', () => {
+    const draft = fixtureInvoice({ id: 'draft', number: '2026-09-001', variableSymbol: '202609001' });
+    expect(refreshDraft(draft, { invoices: [saved], supplier: null }, '2026-09-20')).toMatchObject({
+      number: '2026-09-002',
+      variableSymbol: '202609002',
+    });
+  });
+
+  it('keeps a variable symbol the user typed, and a draft whose number is free', () => {
+    const typed = fixtureInvoice({ id: 'draft', number: '2026-09-001', variableSymbol: '777' });
+    expect(refreshDraft(typed, { invoices: [saved], supplier: null }, '2026-09-20').variableSymbol).toBe('777');
+    const free = fixtureInvoice({ id: 'draft', number: '2026-09-005' });
+    expect(refreshDraft(free, { invoices: [saved], supplier: null }, '2026-09-20')).toBe(free);
   });
 });

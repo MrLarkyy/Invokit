@@ -60,3 +60,14 @@ export function duplicateInvoice(source: Invoice, book: InvoiceBook, today: stri
     showQr: source.showQr,
   };
 }
+
+/**
+ * A restored new-invoice draft whose number has been used since (saved here or in another tab) gets the next free
+ * number, and the matching variable symbol when that was still the automatic one.
+ */
+export function refreshDraft(draft: Invoice, book: InvoiceBook, today: string): Invoice {
+  if (!book.invoices.some((i) => i.number.trim() === draft.number.trim())) return draft;
+  const number = nextNumber(book.invoices, today);
+  const automaticVs = draft.variableSymbol === variableSymbolFor(draft.number);
+  return { ...draft, number, ...(automaticVs ? { variableSymbol: variableSymbolFor(number) } : {}) };
+}

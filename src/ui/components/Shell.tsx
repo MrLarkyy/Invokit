@@ -1,17 +1,16 @@
 import type { ReactNode } from 'react';
 import { toHash, type Route } from '../router';
-import { IconAlert, IconList, IconPlus, IconSettings, IconShield } from './Icons';
+import { IconList, IconPlus, IconSettings, IconShield } from './Icons';
 import { Logo } from './Logo';
+import { StorageNotice } from './StorageNotice';
 
 interface ShellProps {
   route: Route;
-  /** The stored data could not be read at start. */
-  recovered: boolean;
   children: ReactNode;
 }
 
 /** The app frame: header, content, footer and the bottom bar on mobile. */
-export function Shell({ route, recovered, children }: ShellProps) {
+export function Shell({ route, children }: ShellProps) {
   const inApp = route.name !== 'uvod';
   const current = (...names: Route['name'][]) => (names.includes(route.name) ? 'page' : undefined);
 
@@ -45,15 +44,7 @@ export function Shell({ route, recovered, children }: ShellProps) {
         </div>
       </header>
 
-      {recovered ? (
-        <div className="container banner" role="alert">
-          <IconAlert size={18} />
-          <p>
-            Uložená data v tomhle prohlížeči se nepodařilo přečíst, proto začínáš s prázdným přehledem. Původní data
-            zůstala v prohlížeči uložená stranou. Máš-li zálohu, obnov ji v nastavení.
-          </p>
-        </div>
-      ) : null}
+      <StorageNotice />
 
       <main className="main">{children}</main>
 

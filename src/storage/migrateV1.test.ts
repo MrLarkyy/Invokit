@@ -140,3 +140,18 @@ describe('migrateV1', () => {
     expect(data.invoices[0]?.number).toBe('2026-09-001');
   });
 });
+
+describe('v1 lists without a limit', () => {
+  it('are trimmed to the v2 limits, so a large Invokit history still migrates', () => {
+    const customers = Array.from({ length: 5_200 }, (_, n) => ({ ...customerV1, name: `Firma ${n}` }));
+    const items = Array.from({ length: 5_300 }, (_, n) => ({
+      quantity: '1',
+      unit: 'ks',
+      description: `Položka ${n}`,
+      unitPrice: '1',
+    }));
+    const data = parseAppData(JSON.stringify(dataV1([], { customers, items })));
+    expect(data.customers).toHaveLength(5_000);
+    expect(data.items).toHaveLength(5_000);
+  });
+});

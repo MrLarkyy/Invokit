@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isValidDic } from '../../czech/dic';
 import { isValidIco } from '../../czech/ico';
 import { addDays, diffDays, formatCzechDate } from '../../domain/dates';
@@ -12,11 +12,12 @@ import {
 } from '../../domain/invoice';
 import { uniqueInvoiceId, variableSymbolFor } from '../../domain/invoiceNumber';
 import { computeTotals, itemTotalCents } from '../../domain/invoiceTotals';
-import { invoiceProblem } from '../../domain/invoiceValidation';
+import { findInvoiceProblem, isCompleteSupplier, type InvoiceProblem } from '../../domain/invoiceValidation';
+import { parseItemPrice, parseItemQuantity } from '../../domain/itemInput';
 import { LIMITS } from '../../domain/limits';
-import { centsToInput, formatCzk, formatQuantity, parseCents, parseQuantity } from '../../domain/money';
-import { createBlankInvoice, newItem } from '../../domain/newInvoice';
-import { numberTakenProblem } from '../../domain/records';
+import { centsToInput, formatCzk, formatQuantity } from '../../domain/money';
+import { createBlankInvoice, newItem, refreshDraft } from '../../domain/newInvoice';
+import { byDescription, byName, saveProblem } from '../../domain/records';
 import { savedProfile, snapshotOf } from '../../domain/supplierProfile';
 import { loadDraft, saveDraft } from '../../storage/appDataStorage';
 import { newRowId, todayIso } from '../clock';
@@ -29,7 +30,8 @@ import { InvoicePaper } from '../components/InvoicePaper';
 import { NotFound } from '../components/NotFound';
 import { useToast } from '../components/Toast';
 import { Toggle } from '../components/Toggle';
-import { navigate } from '../router';
+import { printInvoice } from '../printInvoice';
+import { navigate, toHash } from '../router';
 import { useStore } from '../StoreProvider';
 import { useDocumentTitle } from '../useDocumentTitle';
 
@@ -45,9 +47,11 @@ interface ItemRowProps {
   catalog: CatalogItem[];
   onChange: (changes: Partial<InvoiceItem>) => void;
   onRemove: () => void;
+  /** A save problem of this row, shown under its description. */
+  error: string | null;
 }
 
-function ItemRow({ item, index, vatPayer, removable, catalog, onChange, onRemove }: ItemRowProps) {
+function ItemRow({ item, index, vatPayer, removable, catalog, onChange, onRemove, error }: ItemRowProps) {
   const changeDescription = (description: string) => {
     const picked = catalog.find((entry) => norm(entry.description) === norm(description));
     onChange(
@@ -59,7 +63,7 @@ function ItemRow({ item, index, vatPayer, removable, catalog, onChange, onRemove
 
   return (
     <li className="item">
-      <Field label="Popis" htmlFor={`i-desc-${item.id}`} className="item__desc">
+      <Field label="Popis" htmlFor={`i-desc-${item.id}`} className="item__desc" error={error}>
         <input
           id={`i-desc-${item.id}`}
           className="input"
@@ -75,9 +79,9 @@ function ItemRow({ item, index, vatPayer, removable, catalog, onChange, onRemove
           id={`i-qty-${item.id}`}
           value={item.quantity}
           format={formatQuantity}
-          parse={parseQuantity}
+          parse={parseItemQuantity}
           onCommit={(quantity) => onChange({ quantity })}
-          invalidHint="Zadej číslo, nejvýš 6 desetinných míst."
+          invalidHint="Zadej číslo do 1 000 000, nejvýš 6 desetinných míst."
         />
       </Field>
       <Field label="Jednotka" htmlFor={`i-unit-${item.id}`}>
@@ -94,9 +98,9 @@ function ItemRow({ item, index, vatPayer, removable, catalog, onChange, onRemove
           id={`i-price-${item.id}`}
           value={item.unitPriceCents}
           format={centsToInput}
-          parse={parseCents}
+          parse={parseItemPrice}
           onCommit={(unitPriceCents) => onChange({ unitPriceCents })}
-          invalidHint="Zadej číslo, nejvýš 2 desetinná místa."
+          invalidHint="Zadej částku do 1 000 000 000 Kč, nejvýš 2 desetinná místa."
         />
       </Field>
       {vatPayer ? (
@@ -133,6 +137,40 @@ function ItemRow({ item, index, vatPayer, removable, catalog, onChange, onRemove
   );
 }
 
+interface EditorProblem {
+  message: string;
+  /** The id of the element to mark and focus. */
+  targetId: string;
+}
+
+function problemTarget(problem: InvoiceProblem, firstItemId: string): string {
+  switch (problem.field) {
+    case 'supplier':
+      return 'supplier-notice';
+    case 'customerName':
+    case 'customer':
+      return 'c-name';
+    case 'items':
+      return `i-desc-${firstItemId}`;
+    case 'item':
+      return `i-desc-${problem.itemId ?? firstItemId}`;
+    case 'total':
+      return 'items-sum';
+    case 'number':
+      return 'f-number';
+    case 'variableSymbol':
+      return 'f-vs';
+    case 'issueDate':
+      return 'f-issue';
+    case 'dueDate':
+      return 'f-due';
+    case 'taxableSupplyDate':
+      return 'f-duzp';
+    case 'note':
+      return 'f-note';
+  }
+}
+
 function withoutLegacy(item: InvoiceItem, changes: Partial<InvoiceItem>): InvoiceItem {
   const next = { ...item, ...changes };
   // An edited amount is computed exactly again; the migrated v1 rounding applies to the unchanged line only.
@@ -141,28 +179,45 @@ function withoutLegacy(item: InvoiceItem, changes: Partial<InvoiceItem>): Invoic
 }
 
 export function InvoiceEditor({ editId }: { editId?: string }) {
-  const { data, dispatch } = useStore();
+  const { data, dispatch, storage, canWrite } = useStore();
   const toast = useToast();
   const isNew = editId === undefined;
   const existing = isNew ? undefined : data.invoices.find((invoice) => invoice.id === editId);
-  const [initial] = useState<Invoice>(() =>
-    existing
-      ? structuredClone(existing)
-      : (loadDraft(window.localStorage) ?? createBlankInvoice(data, todayIso(), newRowId)),
-  );
-  const [draft, setDraft] = useState(initial);
+  const [initial] = useState<Invoice>(() => {
+    if (existing) return structuredClone(existing);
+    const stored = loadDraft(storage);
+    return stored ? refreshDraft(stored, data, todayIso()) : createBlankInvoice(data, todayIso(), newRowId);
+  });
+  const [draft, setDraftState] = useState(initial);
   const [mobileView, setMobileView] = useState<'form' | 'preview'>('form');
+  const [problem, setProblem] = useState<EditorProblem | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const setDraft: typeof setDraftState = (next) => {
+    setProblem(null);
+    setDraftState(next);
+  };
   useDocumentTitle(existing ? `Úprava faktury ${existing.number}` : 'Nová faktura');
 
   // The unsaved new invoice survives a reload once the user changed something; a refused write only loses that.
   useEffect(() => {
-    if (isNew && draft !== initial) saveDraft(window.localStorage, draft);
-  }, [isNew, draft, initial]);
+    if (isNew && canWrite && draft !== initial) saveDraft(storage, draft);
+  }, [isNew, canWrite, draft, initial, storage]);
+
+  // A refused save points at its field: marked, announced and focused.
+  useEffect(() => {
+    if (problem) document.getElementById(problem.targetId)?.focus();
+  }, [problem]);
 
   if (!isNew && !existing) return <NotFound />;
 
-  // A new invoice takes the supplier profile as it is now; an issued one keeps its own snapshot.
-  const invoice: Invoice = isNew ? { ...draft, supplier: snapshotOf(savedProfile(data)) } : draft;
+  // A new invoice takes the supplier profile as it is now; an issued one keeps its own snapshot, unless that
+  // snapshot is incomplete (an invoice must name its supplier), which the current profile then replaces.
+  const refreshSupplier = isNew || !isCompleteSupplier(draft.supplier);
+  const invoice: Invoice = refreshSupplier ? { ...draft, supplier: snapshotOf(savedProfile(data)) } : draft;
+  const supplierComplete = isCompleteSupplier(invoice.supplier);
+  const customers = [...data.customers].sort(byName);
+  const catalog = [...data.items].sort(byDescription);
+  const errorFor = (targetId: string) => (problem?.targetId === targetId ? problem.message : null);
   const vatPayer = invoice.supplier.vatPayer;
   const totals = computeTotals(invoice.items, vatPayer);
   const term = diffDays(invoice.issueDate, invoice.dueDate);
@@ -198,14 +253,23 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     const takenIds = new Set(data.invoices.map((i) => i.id));
     const id = isNew && takenIds.has(invoice.id) ? uniqueInvoiceId(invoice.number, takenIds) : invoice.id;
     const toSave = { ...invoice, id };
-    const problem = invoiceProblem(toSave) ?? numberTakenProblem(data, toSave);
-    if (problem) {
+    const invalidNumber = formRef.current?.querySelector<HTMLElement>('[data-invalid-number]');
+    const found = findInvoiceProblem(toSave);
+    const stored = saveProblem(data, toSave);
+    const next: EditorProblem | null = invalidNumber
+      ? { message: 'Oprav zvýrazněné číslo u položky.', targetId: invalidNumber.id }
+      : found
+        ? { message: found.message, targetId: problemTarget(found, draft.items[0]?.id ?? '') }
+        : stored
+          ? { message: stored, targetId: stored.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum' }
+          : null;
+    if (next) {
       setMobileView('form');
-      toast(problem);
+      setProblem(next);
       return null;
     }
     dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString() });
-    if (isNew) saveDraft(window.localStorage, null);
+    if (isNew && canWrite) saveDraft(storage, null);
     return toSave;
   };
 
@@ -220,13 +284,13 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     const saved = commit();
     if (!saved) return;
     // Print uses @media print in app.css: only the invoice paper goes to the printer or the PDF.
-    window.print();
+    printInvoice(saved.number);
     navigate({ name: 'faktura', id: saved.id });
   };
 
   const discard = () => {
     if (isNew) {
-      saveDraft(window.localStorage, null);
+      if (canWrite) saveDraft(storage, null);
       navigate({ name: 'faktury' });
     } else {
       navigate({ name: 'faktura', id: invoice.id });
@@ -239,9 +303,11 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
         <div>
           <h1>{existing ? `Úprava faktury ${existing.number}` : 'Nová faktura'}</h1>
           <p className="page__lead">
-            {existing
+            {existing && !refreshSupplier
               ? 'Dodavatel, DPH a účet zůstávají tak, jak byly při vystavení.'
-              : 'Vpravo vidíš fakturu tak, jak půjde do tisku. Mění se, jak píšeš.'}
+              : existing
+                ? 'Údaje dodavatele na faktuře nebyly úplné, proto se doplní z nastavení.'
+                : 'Vpravo vidíš fakturu tak, jak půjde do tisku. Mění se, jak píšeš.'}
           </p>
         </div>
         <div className="page__actions">
@@ -270,22 +336,36 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
       </div>
 
       <div className={`editor editor--${mobileView}`}>
-        <form className="editor__form" onSubmit={(event) => event.preventDefault()} noValidate>
+        <form ref={formRef} className="editor__form" onSubmit={(event) => event.preventDefault()} noValidate>
+          <div className="form-problem" role="alert">
+            {problem ? problem.message : null}
+          </div>
+          {!supplierComplete ? (
+            <div
+              id="supplier-notice"
+              className={`notice${problem?.targetId === 'supplier-notice' ? ' notice--error' : ''}`}
+              tabIndex={-1}
+            >
+              Na faktuře chybí tvoje údaje: jméno nebo název, adresa a IČO
+              {invoice.supplier.vatPayer ? ', u plátce DPH i DIČ' : ''}.{' '}
+              <a href={toHash({ name: 'nastaveni' })}>Doplň je v nastavení</a>.
+            </div>
+          ) : null}
           <section className="card">
             <h2 className="card__title">Odběratel</h2>
-            {data.customers.length > 0 ? (
+            {customers.length > 0 ? (
               <Field label="Vybrat uloženého odběratele" htmlFor="c-past">
                 <select
                   id="c-past"
                   className="input"
                   value=""
                   onChange={(event) => {
-                    const picked = data.customers[Number(event.target.value)];
+                    const picked = customers[Number(event.target.value)];
                     if (picked) patchCustomer({ ...picked });
                   }}
                 >
                   <option value="">Vybrat ze seznamu</option>
-                  {data.customers.map((saved, index) => (
+                  {customers.map((saved, index) => (
                     <option key={`${saved.ico}-${saved.name}`} value={index}>
                       {saved.name}
                     </option>
@@ -295,7 +375,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
             ) : null}
 
             <div className="grid-2">
-              <Field label="Název nebo jméno" htmlFor="c-name" className="span-2">
+              <Field label="Název nebo jméno" htmlFor="c-name" className="span-2" error={errorFor('c-name')}>
                 <input
                   id="c-name"
                   className="input"
@@ -370,7 +450,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
           <section className="card">
             <h2 className="card__title">Položky</h2>
             <datalist id={CATALOG_LIST}>
-              {data.items.map((entry) => (
+              {catalog.map((entry) => (
                 <option key={entry.description} value={entry.description} />
               ))}
             </datalist>
@@ -382,7 +462,8 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
                   index={index}
                   vatPayer={vatPayer}
                   removable={draft.items.length > 1}
-                  catalog={data.items}
+                  catalog={catalog}
+                  error={errorFor(`i-desc-${item.id}`)}
                   onChange={(changes) => patchItem(item.id, changes)}
                   onRemove={() => patch({ items: draft.items.filter((other) => other.id !== item.id) })}
                 />
@@ -398,7 +479,11 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
                 <IconPlus size={18} />
                 Přidat položku
               </button>
-              <p className="items__sum">
+              <p
+                id="items-sum"
+                className={`items__sum${problem?.targetId === 'items-sum' ? ' items__sum--error' : ''}`}
+                tabIndex={-1}
+              >
                 Celkem k úhradě <strong>{formatCzk(totals.totalCents)}</strong>
               </p>
             </div>
@@ -407,7 +492,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
           <section className="card">
             <h2 className="card__title">Termíny a platba</h2>
             <div className="grid-2">
-              <Field label="Číslo faktury" htmlFor="f-number">
+              <Field label="Číslo faktury" htmlFor="f-number" error={errorFor('f-number')}>
                 <input
                   id="f-number"
                   className="input"
@@ -416,7 +501,12 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
                   onChange={(event) => changeNumber(event.target.value)}
                 />
               </Field>
-              <Field label="Variabilní symbol" htmlFor="f-vs" hint="Podle něj spáruješ platbu. Nejvýš 10 číslic.">
+              <Field
+                label="Variabilní symbol"
+                htmlFor="f-vs"
+                hint="Podle něj spáruješ platbu. Nejvýš 10 číslic."
+                error={errorFor('f-vs')}
+              >
                 <input
                   id="f-vs"
                   className="input"
@@ -426,7 +516,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
                   onChange={(event) => patch({ variableSymbol: event.target.value.replace(/\D/g, '').slice(0, 10) })}
                 />
               </Field>
-              <Field label="Datum vystavení" htmlFor="f-issue">
+              <Field label="Datum vystavení" htmlFor="f-issue" error={errorFor('f-issue')}>
                 <input
                   id="f-issue"
                   className="input"
@@ -435,7 +525,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
                   onChange={(event) => changeIssueDate(event.target.value)}
                 />
               </Field>
-              <Field label="Datum splatnosti" htmlFor="f-due">
+              <Field label="Datum splatnosti" htmlFor="f-due" error={errorFor('f-due')}>
                 <input
                   id="f-due"
                   className="input"
@@ -449,6 +539,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
                 <Field
                   label="Datum zdanitelného plnění (DUZP)"
                   htmlFor="f-duzp"
+                  error={errorFor('f-duzp')}
                   className="span-2"
                   hint="Na daňovém dokladu je povinné. Obvykle je stejné jako datum vystavení."
                 >
@@ -490,7 +581,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
 
           <section className="card">
             <h2 className="card__title">Poznámka</h2>
-            <Field label="Text pod součtem (nepovinné)" htmlFor="f-note">
+            <Field label="Text pod součtem (nepovinné)" htmlFor="f-note" error={errorFor('f-note')}>
               <textarea
                 id="f-note"
                 className="input textarea"

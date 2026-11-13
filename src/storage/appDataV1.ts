@@ -114,11 +114,14 @@ function readProfileV1(value: unknown): SupplierProfileV1 {
   };
 }
 
-/** A version 1 object rebuilt field by field; throws a Czech message on a wrong type or a count over the limits. */
+/**
+ * A version 1 object rebuilt field by field; throws a Czech message on a wrong type or too many invoices. Saved
+ * customers and items had no limit in v1: they are read in full here and trimmed by the migration.
+ */
 export function parseAppDataV1(record: JsonRecord): AppDataV1 {
   const invoices = readArray(record, 'invoices', 'záloha', LIMITS.invoices, 'Záloha má příliš mnoho faktur.');
-  const customers = readArray(record, 'customers', 'záloha', LIMITS.customers, 'Záloha má příliš mnoho odběratelů.');
-  const items = readArray(record, 'items', 'záloha', LIMITS.catalog, 'Záloha má příliš mnoho uložených položek.');
+  const customers = readArray(record, 'customers', 'záloha', ANY_TEXT, 'Záloha má příliš mnoho odběratelů.');
+  const items = readArray(record, 'items', 'záloha', ANY_TEXT, 'Záloha má příliš mnoho uložených položek.');
   const supplier = own(record, 'supplier');
   return {
     version: 1,
