@@ -20,5 +20,11 @@ export function downloadBackup(data: AppData, today: string): void {
 /** Reads a backup (v2, or v1 migrated); throws a Czech message, before reading a file over the size limit too. */
 export async function readBackup(file: File): Promise<AppData> {
   if (file.size > LIMITS.fileBytes) throw new Error('Soubor je příliš velký (nejvýš 5 MB).');
-  return parseAppData(await file.text());
+  let text: string;
+  try {
+    text = await file.text();
+  } catch {
+    throw new Error('Soubor se nepodařilo přečíst.');
+  }
+  return parseAppData(text);
 }

@@ -1,0 +1,49 @@
+/*
+ * Invoo design tokens: colours, type, shape. A brand change is a change of these values.
+ */
+:root {
+  /* Base */
+  --ink: #111413;
+  --ink-2: #1a1f1d;
+  --ink-3: #2a302e;
+  --paper: #f1f2ee;
+  --paper-2: #e7e9e3;
+  --surface: #ffffff;
+  --line: #d6d9d1;
+  --line-strong: #b9beb5;
+
+  /* Text */
+  --text: #111413;
+  --text-2: #3b413e;
+  --muted: #636a66;
+  --on-dark: #eceee9;
+  --muted-on-dark: #a1a8a4;
+
+  /* Brand */
+  --accent: #ff5b1f;
+  --accent-hover: #ff6a33;
+  --accent-tint: #ffb08f;
+  --accent-soft: #ffe9df;
+  /* Orange for text on a light background (pure #ff5b1f lacks contrast). */
+  --accent-text: #b83b0b;
+
+  /* States */
+  --ok-soft: #dcf1e3;
+  --ok-ink: #14532d;
+  --danger-ink: #9f1d1d;
+
+  /* Type: self-hosted variable fonts (Fontsource, OFL), system fallbacks while they load. */
+  --font-display: 'Fredoka Variable', ui-rounded, system-ui, sans-serif;
+  --font-body: 'Nunito Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Shape */
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 24px;
+  --r-xl: 36px;
+  --shadow: 0 18px 40px rgb(17 20 19 / 0.1);
+
+  /* Sizes */
+  --header-h: 72px;
+  --tabbar-h: 64px;
+}
