@@ -1,32 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import type { SavedInvoice } from '../storage/appData';
+import { fixtureInvoice, fixtureItem } from '../test/invoiceFixture';
+import type { Invoice } from './invoice';
 import { invoiceStats } from './invoiceStats';
 
-function saved(issueDate: string, dueDate: string, price: string, paid: boolean, customer: string): SavedInvoice {
-  return {
+function saved(issueDate: string, dueDate: string, priceCents: number, paid: boolean, customer: string): Invoice {
+  return fixtureInvoice({
+    id: issueDate,
     number: issueDate,
     issueDate,
     dueDate,
-    variableSymbol: '',
-    bankAccount: '',
-    paymentMethod: '',
-    supplier: { name: '', street: '', city: '', ico: '', dic: '' },
-    vatPayer: false,
-    registryNote: '',
-    customer: { name: customer, street: '', city: '', ico: '', dic: '' },
-    items: [{ quantity: '1', unit: 'ks', description: 'x', unitPrice: price }],
-    savedAt: '',
+    customer: { name: customer, street: '', city: '', zip: '', ico: '', dic: '' },
+    items: [fixtureItem('x', '1', priceCents)],
     paid,
-  };
+  });
 }
 
 describe('invoiceStats', () => {
   const invoices = [
-    saved('2026-09-02', '2026-09-16', '1000,50', true, 'Acme'),
-    saved('2026-10-01', '2026-10-15', '2000', false, 'Acme'),
-    saved('2026-10-20', '2026-11-03', '500', false, 'Beta'),
-    saved('2025-12-10', '2025-12-24', '300', true, 'Beta'),
-    saved('2024-01-10', '2024-01-24', '99', true, 'Old'),
+    saved('2026-09-02', '2026-09-16', 100_050, true, 'Acme'),
+    saved('2026-10-01', '2026-10-15', 200_000, false, 'Acme'),
+    saved('2026-10-20', '2026-11-03', 50_000, false, 'Beta'),
+    saved('2025-12-10', '2025-12-24', 30_000, true, 'Beta'),
+    saved('2024-01-10', '2024-01-24', 9_900, true, 'Old'),
   ];
   const stats = invoiceStats(invoices, '2026-10-30');
 
@@ -51,5 +46,12 @@ describe('invoiceStats', () => {
       ['Beta', 80_000, 2],
       ['Old', 9_900, 1],
     ]);
+  });
+
+  it('counts each invoice with its own supplier VAT status', () => {
+    const payer = { ...saved('2026-10-02', '2026-10-16', 10_000, false, 'Acme'), id: 'p', number: 'p' };
+    payer.supplier = { ...payer.supplier, vatPayer: true };
+    payer.items = [fixtureItem('x', '1', 10_000, 21)];
+    expect(invoiceStats([payer], '2026-10-30').yearCents).toBe(12_100);
   });
 });

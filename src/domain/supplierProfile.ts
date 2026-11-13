@@ -1,46 +1,69 @@
-import type { AppData } from '../storage/appData';
-import type { Invoice, Party } from './invoice';
+import { formatCzechAccount, parseCzechAccount } from '../czech/czechIban';
+import { emptyParty, type Invoice, type Party, type SupplierSnapshot } from './invoice';
 
-/** The user's own details that repeat on every invoice. */
+/** The user's own details, edited in Settings and copied into each invoice when it is saved. */
 export interface SupplierProfile {
-  supplier: Party;
+  party: Party;
   vatPayer: boolean;
+  email: string;
   registryNote: string;
-  bankAccount: string;
-  paymentMethod: string;
+  accountPrefix: string;
+  accountNumber: string;
+  bankCode: string;
 }
 
-export function profileOf(invoice: Invoice): SupplierProfile {
+export function emptyProfile(): SupplierProfile {
   return {
-    supplier: { ...invoice.supplier },
-    vatPayer: invoice.vatPayer,
-    registryNote: invoice.registryNote,
-    bankAccount: invoice.bankAccount,
-    paymentMethod: invoice.paymentMethod,
+    party: emptyParty(),
+    vatPayer: false,
+    email: '',
+    registryNote: '',
+    accountPrefix: '',
+    accountNumber: '',
+    bankCode: '',
   };
 }
 
-/** The remembered profile; backups made before it existed fall back to the newest saved invoice. */
-export function savedProfile(data: AppData): SupplierProfile | null {
+export function profileAccount(profile: SupplierProfile): string {
+  return formatCzechAccount({
+    prefix: profile.accountPrefix,
+    number: profile.accountNumber,
+    bankCode: profile.bankCode,
+  });
+}
+
+/** A copy of the profile for one invoice; no profile gives an empty non-payer supplier. */
+export function snapshotOf(profile: SupplierProfile | null): SupplierSnapshot {
+  const source = profile ?? emptyProfile();
+  return {
+    party: { ...source.party },
+    vatPayer: source.vatPayer,
+    email: source.email,
+    registryNote: source.registryNote,
+    bankAccount: profileAccount(source),
+  };
+}
+
+/** A profile rebuilt from an invoice; an account that does not parse leaves the account fields empty. */
+export function profileFromSnapshot(snapshot: SupplierSnapshot): SupplierProfile {
+  const account = parseCzechAccount(snapshot.bankAccount);
+  return {
+    party: { ...snapshot.party },
+    vatPayer: snapshot.vatPayer,
+    email: snapshot.email,
+    registryNote: snapshot.registryNote,
+    accountPrefix: account?.prefix ?? '',
+    accountNumber: account?.number ?? '',
+    bankCode: account?.bankCode ?? '',
+  };
+}
+
+/** The remembered profile, or the one of the newest invoice when none was saved yet. */
+export function savedProfile(data: { supplier: SupplierProfile | null; invoices: Invoice[] }): SupplierProfile | null {
   if (data.supplier) return data.supplier;
   const newest = data.invoices.reduce<Invoice | null>(
     (best, i) => (!best || i.number.localeCompare(best.number) > 0 ? i : best),
     null,
   );
-  return newest ? profileOf(newest) : null;
-}
-
-export function hasSupplier(invoice: Invoice): boolean {
-  return invoice.supplier.name.trim() !== '';
-}
-
-/** Fills the supplier part of an invoice whose supplier is still empty; returns whether anything changed. */
-export function prefillSupplier(invoice: Invoice, profile: SupplierProfile | null): boolean {
-  if (!profile || hasSupplier(invoice)) return false;
-  invoice.supplier = { ...profile.supplier };
-  invoice.vatPayer = profile.vatPayer;
-  invoice.registryNote = profile.registryNote;
-  invoice.bankAccount = profile.bankAccount;
-  invoice.paymentMethod = profile.paymentMethod;
-  return true;
+  return newest ? profileFromSnapshot(newest.supplier) : null;
 }

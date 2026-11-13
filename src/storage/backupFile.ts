@@ -1,5 +1,10 @@
+import { LIMITS } from '../domain/limits';
 import type { AppData } from './appData';
-import { parseAppData } from './appDataStorage';
+import { parseAppData } from './appDataSchema';
+
+export function backupFileName(today: string): string {
+  return `invoo-zaloha-${today}.json`;
+}
 
 /** Offers the data as a JSON file to save; the file is created in the browser, nothing is uploaded. */
 export function downloadBackup(data: AppData, today: string): void {
@@ -7,11 +12,13 @@ export function downloadBackup(data: AppData, today: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `invokit-zaloha-${today}.json`;
+  link.download = backupFileName(today);
   link.click();
   URL.revokeObjectURL(url);
 }
 
+/** Reads a backup (v2, or v1 migrated); throws a Czech message, before reading a file over the size limit too. */
 export async function readBackup(file: File): Promise<AppData> {
+  if (file.size > LIMITS.fileBytes) throw new Error('Soubor je příliš velký (nejvýš 5 MB).');
   return parseAppData(await file.text());
 }

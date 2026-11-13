@@ -1,5 +1,5 @@
-import type { SavedInvoice } from '../storage/appData';
-import { invoiceTotalCents } from './invoiceTotals';
+import type { Invoice } from './invoice';
+import { computeTotals } from './invoiceTotals';
 
 export interface MonthTotal {
   month: string; // "2026-09"
@@ -30,8 +30,8 @@ function lastMonths(today: string, count: number): string[] {
   });
 }
 
-/** Totals by issue date; the year is the calendar year of today. */
-export function invoiceStats(invoices: SavedInvoice[], today: string): InvoiceStats {
+/** Totals by issue date, each invoice with its own supplier's VAT status; the year is the calendar year of today. */
+export function invoiceStats(invoices: Invoice[], today: string): InvoiceStats {
   const year = today.slice(0, 4);
   const months = lastMonths(today, 12).map((month) => ({ month, cents: 0 }));
   const byCustomer = new Map<string, CustomerTotal>();
@@ -45,7 +45,7 @@ export function invoiceStats(invoices: SavedInvoice[], today: string): InvoiceSt
     customers: [],
   };
   for (const invoice of invoices) {
-    const cents = invoiceTotalCents(invoice);
+    const cents = computeTotals(invoice.items, invoice.supplier.vatPayer).totalCents;
     if (invoice.issueDate.startsWith(year)) {
       stats.yearCents += cents;
       stats.yearCount += 1;

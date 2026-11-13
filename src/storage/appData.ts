@@ -1,20 +1,16 @@
-import type { Invoice, InvoiceItem, Party } from '../domain/invoice';
+import type { CatalogItem, Invoice, Party } from '../domain/invoice';
 import type { SupplierProfile } from '../domain/supplierProfile';
 
-export interface SavedInvoice extends Invoice {
-  savedAt: string;
-  paid: boolean;
-}
-
+/** Everything Invoo keeps, as stored under `invoo.data.v2` and written to a backup file. */
 export interface AppData {
-  version: 1;
+  version: 2;
+  supplier: SupplierProfile | null;
+  invoices: Invoice[];
   customers: Party[];
-  items: InvoiceItem[];
-  invoices: SavedInvoice[];
-  /** Absent in backups made before the profile was remembered. */
-  supplier?: SupplierProfile;
+  items: CatalogItem[];
+  lastBackupAt: string | null;
 }
 
 export function emptyAppData(): AppData {
-  return { version: 1, customers: [], items: [], invoices: [] };
+  return { version: 2, supplier: null, invoices: [], customers: [], items: [], lastBackupAt: null };
 }

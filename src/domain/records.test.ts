@@ -1,26 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { emptyAppData } from '../storage/appData';
-import type { Invoice } from './invoice';
-import { latestNumber, saveInvoice } from './records';
+import { emptyAppData, type AppData } from '../storage/appData';
+import { fixtureInvoice, fixtureItem as item, fixtureProfile } from '../test/invoiceFixture';
+import { computeTotals } from './invoiceTotals';
+import { createBlankInvoice } from './newInvoice';
+import { deleteCatalogItem, deleteCustomer, deleteInvoice, saveInvoice, setPaid } from './records';
 
-function invoice(number: string, customer = 'Acme s.r.o.', ico = '12345678'): Invoice {
-  return {
+const invoice = (number: string, customer = 'Odběratel Test a.s.', ico = '27410587') =>
+  fixtureInvoice({
+    id: number,
     number,
-    issueDate: '2026-09-02',
-    dueDate: '2026-09-16',
-    variableSymbol: number.replace(/\D/g, ''),
-    bankAccount: '1234567899/0100',
-    paymentMethod: 'Převodem',
-    supplier: { name: 'Dodavatel', street: '', city: '', ico: '1', dic: '' },
-    vatPayer: false,
-    registryNote: '',
-    customer: { name: customer, street: 'Ulice 1', city: 'Praha', ico, dic: '' },
-    items: [
-      { quantity: '10', unit: 'h', description: 'Vývoj', unitPrice: '800' },
-      { quantity: '1', unit: 'ks', description: '', unitPrice: '' },
-    ],
-  };
-}
+    customer: { name: customer, street: 'Testovací 5', city: 'Brno', zip: '602 00', ico, dic: '' },
+    items: [item('Vývoj', '10', 80_000), item('', '1', 0)],
+  });
 
 describe('saveInvoice', () => {
   it('stores the invoice without empty rows and remembers its customer and items', () => {
@@ -28,43 +19,79 @@ describe('saveInvoice', () => {
     expect(data.invoices).toHaveLength(1);
     expect(data.invoices[0]?.items).toHaveLength(1);
     expect(data.invoices[0]?.paid).toBe(false);
-    expect(data.customers.map((c) => c.name)).toEqual(['Acme s.r.o.']);
-    expect(data.items).toEqual([{ quantity: '1', unit: 'h', description: 'Vývoj', unitPrice: '800' }]);
+    expect(data.invoices[0]?.savedAt).toBe('2026-09-02T10:00:00Z');
+    expect(data.customers.map((c) => c.name)).toEqual(['Odběratel Test a.s.']);
+    expect(data.items).toEqual([{ description: 'Vývoj', unit: 'ks', unitPriceCents: 80_000, vatRate: 0 }]);
   });
 
-  it('updates an invoice with the same number and keeps its paid flag', () => {
+  it('updates the invoice with the same id and keeps its paid state', () => {
     let data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a');
-    data = { ...data, invoices: data.invoices.map((i) => ({ ...i, paid: true })) };
+    data = setPaid(data, '2026-09-001', '2026-09-10');
     const changed = invoice('2026-09-001');
-    changed.items[0]!.unitPrice = '900';
+    changed.items[0]!.unitPriceCents = 90_000;
     data = saveInvoice(data, changed, 'b');
     expect(data.invoices).toHaveLength(1);
     expect(data.invoices[0]?.paid).toBe(true);
-    expect(data.invoices[0]?.items[0]?.unitPrice).toBe('900');
-    expect(data.items[0]?.unitPrice).toBe('900');
+    expect(data.invoices[0]?.paidAt).toBe('2026-09-10');
+    expect(data.invoices[0]?.items[0]?.unitPriceCents).toBe(90_000);
+    expect(data.items[0]?.unitPriceCents).toBe(90_000);
+  });
+
+  it('refuses a number another invoice already uses', () => {
+    const data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a');
+    const other = { ...invoice('2026-09-001'), id: 'other' };
+    expect(() => saveInvoice(data, other, 'b')).toThrow('Faktura s číslem 2026-09-001 už existuje.');
+    expect(() => saveInvoice(data, { ...other, number: ' 2026-09-001 ' }, 'b')).toThrow('už existuje');
   });
 
   it('keeps one customer per IČO and lists invoices newest first', () => {
     let data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a');
-    data = saveInvoice(data, invoice('2026-09-002', 'Acme a.s.'), 'b');
-    data = saveInvoice(data, invoice('2026-09-003', 'Beta', '87654321'), 'c');
-    expect(data.customers.map((c) => c.name)).toEqual(['Acme a.s.', 'Beta']);
+    data = saveInvoice(data, invoice('2026-09-002', 'Odběratel Test s.r.o.'), 'b');
+    data = saveInvoice(data, invoice('2026-09-003', 'Beta', '00001121'), 'c');
+    expect(data.customers.map((c) => c.name)).toEqual(['Beta', 'Odběratel Test s.r.o.']);
     expect(data.invoices.map((i) => i.number)).toEqual(['2026-09-003', '2026-09-002', '2026-09-001']);
   });
 
-  it('does not let a later edit of the draft change the saved copy', () => {
+  it('stores a copy: a later edit of the draft does not change the saved invoice', () => {
     const draft = invoice('2026-09-001');
     const data = saveInvoice(emptyAppData(), draft, 'a');
     draft.customer.name = 'Changed';
-    expect(data.invoices[0]?.customer.name).toBe('Acme s.r.o.');
-    expect(data.customers[0]?.name).toBe('Acme s.r.o.');
+    draft.supplier.party.name = 'Changed';
+    expect(data.invoices[0]?.customer.name).toBe('Odběratel Test a.s.');
+    expect(data.invoices[0]?.supplier.party.name).toBe('Ukázka s.r.o.');
+    expect(data.customers[0]?.name).toBe('Odběratel Test a.s.');
+  });
+
+  it('keeps the total of a saved invoice when the profile later becomes a VAT payer', () => {
+    let data: AppData = { ...emptyAppData(), supplier: fixtureProfile({ vatPayer: false }) };
+    const blank = createBlankInvoice(data, '2026-09-02', () => 'row');
+    const issued = { ...blank, customer: invoice('x').customer, items: [item('Vývoj', '1', 10_000, 21)] };
+    data = saveInvoice(data, issued, 'a');
+    data = { ...data, supplier: fixtureProfile({ vatPayer: true }) };
+    const saved = data.invoices[0]!;
+    expect(computeTotals(saved.items, saved.supplier.vatPayer).totalCents).toBe(10_000);
   });
 });
 
-describe('latestNumber', () => {
-  it('returns the highest of the history and the fallback', () => {
-    const data = saveInvoice(emptyAppData(), invoice('2026-09-004'), 'a');
-    expect(latestNumber(data, '2026-09-001')).toBe('2026-09-004');
-    expect(latestNumber(data, '2026-10-001')).toBe('2026-10-001');
+describe('deleting', () => {
+  it('removes an invoice, a customer or a catalog item', () => {
+    let data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a');
+    data = saveInvoice(data, invoice('2026-09-002', 'Beta', '00001121'), 'b');
+    data = deleteInvoice(data, '2026-09-001');
+    expect(data.invoices.map((i) => i.id)).toEqual(['2026-09-002']);
+    data = deleteCustomer(data, { ...data.customers[0]! });
+    expect(data.customers.map((c) => c.name)).toEqual(['Odběratel Test a.s.']);
+    data = deleteCatalogItem(data, ' vývoj ');
+    expect(data.items).toEqual([]);
+  });
+});
+
+describe('setPaid', () => {
+  it('marks paid with a date and unpaid with null', () => {
+    let data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a');
+    data = setPaid(data, '2026-09-001', '2026-09-10');
+    expect(data.invoices[0]).toMatchObject({ paid: true, paidAt: '2026-09-10' });
+    data = setPaid(data, '2026-09-001', null);
+    expect(data.invoices[0]).toMatchObject({ paid: false, paidAt: null });
   });
 });
