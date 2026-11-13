@@ -32,19 +32,20 @@ export function InvoiceDetail({ id }: { id: string }) {
 
   const togglePaid = () => {
     if (invoice.paid) {
-      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
-      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, stored));
+      const done = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
+      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, done));
     } else {
-      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
-      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, stored), stored ? 'happy' : 'watch');
+      const done = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
+      const tone = done.result === 'stored' ? 'happy' : 'watch';
+      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, done), tone);
     }
   };
 
   const remove = () => {
     if (!window.confirm(`Smazat fakturu ${invoice.number}? Smaže se jen z tohoto prohlížeče a nejde to vrátit.`))
       return;
-    const stored = dispatch({ type: 'invoice/delete', id: invoice.id });
-    toast(withStoredNote(`Faktura ${invoice.number} je smazaná.`, stored));
+    const done = dispatch({ type: 'invoice/delete', id: invoice.id });
+    toast(withStoredNote(`Faktura ${invoice.number} je smazaná.`, done));
     navigate({ name: 'faktury' });
   };
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { createBlankInvoice } from '../domain/newInvoice';
+import { TOO_MANY_LOGOS } from '../domain/logos';
 import { fullLogoData, printedLogos } from '../test/fullLogoData';
-import { FIXTURE_LOGO, fixtureInvoice, fixtureLogo, fixtureProfile } from '../test/invoiceFixture';
+import { FIXTURE_LOGO, fixtureInvoice, fixtureItem, fixtureLogo, fixtureProfile } from '../test/invoiceFixture';
 import { olderAppData } from '../test/olderAppData';
 import { QuotaStorage } from '../test/quotaStorage';
 import { emptyAppData, type AppData } from './appData';
+import { INVOICE_GONE } from './appReducer';
 import {
   BROKEN_DATA_KEY,
   DATA_KEY,
@@ -17,17 +20,24 @@ import {
   appStoreReducer,
   changeAppStore,
   openAppStore,
+  outcomeOf,
   rewriteAppStore,
   syncAppStore,
   type AppStore,
   type AppStoreAction,
+  type AppStoreChange,
 } from './appStore';
 import { MemoryStorage } from './memoryStorage';
 
 const CORRUPT = '{"version":2,"invoices":"broken"';
 const OLDER_COPY = 'first corruption';
 
-const saveInvoice: AppStoreAction = { type: 'invoice/save', invoice: fixtureInvoice(), now: '2026-09-02T10:00:00Z' };
+const saveInvoice: AppStoreAction = {
+  type: 'invoice/save',
+  invoice: fixtureInvoice(),
+  now: '2026-09-02T10:00:00Z',
+  create: true,
+};
 const saveProfile: AppStoreAction = { type: 'supplier/save', supplier: fixtureProfile(), logo: null };
 const saveLogo: AppStoreAction = { type: 'supplier/save', supplier: fixtureProfile(), logo: FIXTURE_LOGO };
 
@@ -230,11 +240,23 @@ describe('app store', () => {
     const storage = new MemoryStorage();
     const { store } = changeAppStore(storage, open(storage), saveInvoice);
     storage.failWrites = true;
-    expect(changeAppStore(storage, store, { type: 'saving/resume' })).toEqual({ store, written: 'unchanged' });
+    const nothing = { store, written: 'unchanged', problem: null };
+    expect(changeAppStore(storage, store, { type: 'saving/resume' })).toEqual(nothing);
+  });
+
+  it('writes nothing for an action it cannot apply, and says why', () => {
+    const storage = new MemoryStorage();
+    const { store } = changeAppStore(storage, open(storage), saveInvoice);
+    storage.failWrites = true;
+    const taken = 'Faktura s číslem 2026-09-001 už existuje.';
+    expect(changeAppStore(storage, store, saveInvoice)).toEqual({ store, written: 'unchanged', problem: taken });
     const sameNumber: AppStoreAction = { ...saveInvoice, invoice: fixtureInvoice({ id: 'other' }) };
-    const refused = changeAppStore(storage, store, sameNumber);
-    expect(refused.written).toBe('unchanged');
-    expect(refused.store).toBe(store);
+    expect(changeAppStore(storage, store, sameNumber)).toEqual({ store, written: 'unchanged', problem: taken });
+    expect(changeAppStore(storage, store, { type: 'invoice/delete', id: 'smazana' })).toEqual({
+      store,
+      written: 'unchanged',
+      problem: INVOICE_GONE,
+    });
   });
 
   it('stores the data as it is after the Invokit keys were removed', () => {
@@ -607,17 +629,22 @@ describe('another tab of this version', () => {
     expect(synced(storage, store)).toBe(store);
   });
 
-  it('reports a change that altered nothing in the data the other tab stored meanwhile', () => {
-    const storage = new MemoryStorage();
+  it('has a change to an invoice it deleted meanwhile reported as not made, and nothing written', () => {
+    const storage = holding({ [DATA_KEY]: text(OLD) });
     const opened = open(storage);
-    storage.setItem(DATA_KEY, text(withInvoices(fixtureInvoice({ id: 'theirs' }))));
+    // The other tab deleted the invoice this tab still shows and now marks as paid.
+    storage.setItem(DATA_KEY, text(emptyAppData()));
     const before = snapshot(storage);
-    // The same number is already taken there: the invoice is not saved.
-    const { store, written } = changeAppStore(storage, opened, saveInvoice);
-    expect(written).toBe('unchanged');
-    expect(store.data.invoices.map((i) => i.id)).toEqual(['theirs']);
-    expect(store.data).not.toBe(opened.data);
-    expect(snapshot(storage)).toEqual(before);
+    for (const action of [
+      { type: 'invoice/setPaid', id: 'other-1', paidAt: '2026-10-09' },
+      { type: 'invoice/delete', id: 'other-1' },
+    ] satisfies AppStoreAction[]) {
+      const change = changeAppStore(storage, opened, action);
+      expect(change).toMatchObject({ written: 'unchanged', problem: INVOICE_GONE });
+      expect(change.store.data).toEqual(emptyAppData());
+      expect(snapshot(storage)).toEqual(before);
+      expect(outcomeOf(change, true)).toEqual({ result: 'rejected', reason: INVOICE_GONE });
+    }
   });
 
   it('is ignored while what it left under the data key cannot be read; the next change replaces that text', () => {
@@ -632,6 +659,116 @@ describe('another tab of this version', () => {
     const { store, written } = changeAppStore(storage, opened, saveProfile);
     expect(written).toBe('saved');
     expect(snapshot(storage)).toEqual({ [DATA_KEY]: text(store.data) });
+  });
+});
+
+describe('two tabs offered the same next invoice number', () => {
+  const TODAY = '2026-10-05';
+  /** A new invoice as the editor builds it from the data its tab shows: the next number, and the id made of it. */
+  const issue = (shown: AppData, customer: string): Extract<AppStoreAction, { type: 'invoice/save' }> => {
+    const blank = createBlankInvoice(shown, TODAY, () => 'r1');
+    return {
+      type: 'invoice/save',
+      invoice: {
+        ...blank,
+        customer: { ...blank.customer, name: customer },
+        items: [fixtureItem('Vývoj', '10', 80_000)],
+      },
+      now: `${TODAY}T10:00:00Z`,
+      create: true,
+    };
+  };
+
+  it('keep the invoice saved first: the second save is rejected, not taken for an edit of it', () => {
+    const storage = holding({ [DATA_KEY]: text(withInvoices(fixtureInvoice())) });
+    const first = open(storage);
+    const second = open(storage);
+    const theirs = issue(first.data, 'První odběratel s.r.o.');
+    const mine = issue(second.data, 'Druhý odběratel a.s.');
+    expect(mine.invoice.number).toBe('2026-10-001');
+    expect([mine.invoice.id, mine.invoice.number]).toEqual([theirs.invoice.id, theirs.invoice.number]);
+
+    const issued = changeAppStore(storage, first, theirs);
+    expect(issued.written).toBe('saved');
+    const stored = snapshot(storage);
+
+    // No event reached the second tab before its own save.
+    const change = changeAppStore(storage, second, mine);
+    expect(change).toMatchObject({ written: 'unchanged', problem: 'Faktura s číslem 2026-10-001 už existuje.' });
+    expect(snapshot(storage)).toEqual(stored);
+    expect(change.store.data).toEqual(issued.store.data);
+    expect(change.store.data.invoices.find((i) => i.number === '2026-10-001')?.customer.name).toBe(
+      'První odběratel s.r.o.',
+    );
+    expect(outcomeOf(change, true)).toEqual({
+      result: 'rejected',
+      reason: 'Faktura s číslem 2026-10-001 už existuje.',
+    });
+
+    // Numbered again from the data the tab shows now, it is saved next to the first.
+    const again = issue(change.store.data, 'Druhý odběratel a.s.');
+    expect(again.invoice.number).toBe('2026-10-002');
+    const saved = changeAppStore(storage, change.store, again);
+    expect(saved.written).toBe('saved');
+    expect(loadAppData(storage).data.invoices.map((i) => [i.number, i.customer.name])).toEqual([
+      ['2026-10-002', 'Druhý odběratel a.s.'],
+      ['2026-10-001', 'První odběratel s.r.o.'],
+      ['2026-09-001', 'Odběratel Test a.s.'],
+    ]);
+  });
+
+  it('keep an edit an edit: the tab that issued the invoice still saves its changes to it', () => {
+    const storage = new MemoryStorage();
+    const issued = changeAppStore(storage, open(storage), issue(emptyAppData(), 'První odběratel s.r.o.')).store;
+    const invoice = { ...issued.data.invoices[0]!, note: 'Děkujeme.' };
+    const edited = changeAppStore(storage, issued, { type: 'invoice/save', invoice, now: 'b', create: false });
+    expect(edited).toMatchObject({ written: 'saved', problem: null });
+    expect(loadAppData(storage).data.invoices.map((i) => i.note)).toEqual(['Děkujeme.']);
+  });
+});
+
+describe('outcomeOf', () => {
+  const store = open(new MemoryStorage());
+  const change = (written: AppStoreChange['written'], flags: Partial<AppStore> = {}): AppStoreChange => ({
+    store: { ...store, ...flags },
+    written,
+    problem: null,
+  });
+
+  it('is stored only when the data is in a storage that outlives the visit', () => {
+    expect(outcomeOf(change('saved'), true)).toEqual({ result: 'stored' });
+    expect(outcomeOf(change('saved'), false)).toEqual({ result: 'kept' });
+    expect(outcomeOf(change('unchanged'), true)).toEqual({ result: 'stored' });
+    expect(outcomeOf(change('unchanged'), false)).toEqual({ result: 'kept' });
+  });
+
+  it('is kept when the change was applied for this visit only', () => {
+    expect(outcomeOf(change('failed', { lastWriteFailed: true }), true)).toEqual({ result: 'kept' });
+    expect(outcomeOf(change('off', { canWrite: false }), true)).toEqual({ result: 'kept' });
+    // Nothing to change, but what this tab holds is not in the storage either.
+    expect(outcomeOf(change('unchanged', { canWrite: false }), true)).toEqual({ result: 'kept' });
+    expect(outcomeOf(change('unchanged', { lastWriteFailed: true }), true)).toEqual({ result: 'kept' });
+  });
+
+  it('is rejected with the reason whenever the action was not applied', () => {
+    const reason = 'Faktura s číslem 2026-10-001 už existuje.';
+    for (const persistent of [true, false]) {
+      expect(outcomeOf({ ...change('unchanged'), problem: reason }, persistent)).toEqual({
+        result: 'rejected',
+        reason,
+      });
+    }
+  });
+
+  it('follows real changes: stored, refused by the browser, switched off, rejected', () => {
+    const storage = new MemoryStorage();
+    const saved = changeAppStore(storage, open(storage), saveInvoice);
+    expect(outcomeOf(saved, true)).toEqual({ result: 'stored' });
+    expect(outcomeOf(changeAppStore(storage, saved.store, saveInvoice), true).result).toBe('rejected');
+    storage.failWrites = true;
+    expect(outcomeOf(changeAppStore(storage, saved.store, saveProfile), true)).toEqual({ result: 'kept' });
+    const blocked = blockedByOlderCopy();
+    expect(outcomeOf(changeAppStore(blocked, open(blocked), saveInvoice), true)).toEqual({ result: 'kept' });
   });
 });
 
@@ -708,10 +845,11 @@ describe('logos the invoices print, across tabs', () => {
     expect(stale.data.logos).toEqual([]);
     // Another tab stored the invoices and logos; no event reached this one.
     storage.setItem(DATA_KEY, text(full));
-    const { store, written } = changeAppStore(storage, stale, oneLogoTooMany);
-    expect(written).toBe('unchanged');
-    expect(store.data).toEqual(full);
+    const change = changeAppStore(storage, stale, oneLogoTooMany);
+    expect(change).toMatchObject({ written: 'unchanged', problem: TOO_MANY_LOGOS });
+    expect(change.store.data).toEqual(full);
     expect(snapshot(storage)).toEqual({ [DATA_KEY]: text(full) });
+    expect(outcomeOf(change, true)).toEqual({ result: 'rejected', reason: TOO_MANY_LOGOS });
   });
 
   it('all stay stored when such a tab saves anything else', () => {
@@ -732,7 +870,7 @@ describe('logos the invoices print, across tabs', () => {
       expect(printedLogos(store.data)).toMatchObject(printedLogos(full));
     };
     const refused = changeAppStore(storage, store, oneLogoTooMany);
-    expect(refused).toEqual({ store, written: 'unchanged' });
+    expect(refused).toEqual({ store, written: 'unchanged', problem: TOO_MANY_LOGOS });
     stays();
 
     const theirs = { ...full, lastBackupAt: '2026-09-30' };

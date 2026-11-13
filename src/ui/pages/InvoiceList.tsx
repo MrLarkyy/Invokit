@@ -65,11 +65,12 @@ export function InvoiceList() {
 
   const togglePaid = (invoice: Invoice) => {
     if (invoice.paid) {
-      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
-      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, stored));
+      const done = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
+      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, done));
     } else {
-      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
-      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, stored), stored ? 'happy' : 'watch');
+      const done = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
+      const tone = done.result === 'stored' ? 'happy' : 'watch';
+      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, done), tone);
     }
   };
 

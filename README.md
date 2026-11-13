@@ -41,7 +41,7 @@ načtou dál a dostanou vzhled Invoo bez barvy a loga, s patičkou.
 Data verze 3 mají vlastní klíč `invoo.data.v3` (rozepsaná faktura `invoo.draft.v3`). Dřívější data z klíče
 `invoo.data.v2` se jen přečtou; při první uložené změně se zapíšou pod nový klíč a teprve potom se starý klíč
 odstraní (nevejdou-li se obě kopie vedle sebe, uvolní starý klíč místo předem a při neúspěchu se vrátí beze změny).
-Pod starý klíč už Invoo nic nového nezapisuje.
+Rozepsaná faktura z dřívější verze se při tom přenese s daty. Pod starý klíč už Invoo nic nového nezapisuje.
 
 Starší verze Invoo otevřená v jiné záložce novým datům neublíží: verzi 3 nepřečte a ukládá dál jen pod svůj starý
 klíč. Dokud tady nic neuložíš, její změny se přebírají. Potom už její data zůstávají stranou a Invoo na ně upozorní:
@@ -49,8 +49,19 @@ nabídne je ke stažení (`invoo-starsi-zalozka-RRRR-MM-DD.json`, jde obnovit ja
 data) a po stažení k odstranění z prohlížeče. Nic se neslučuje ani nepřepisuje. Stejně se zachová tahle verze, až
 jednou najde data novější verze: nechá je být, přestane ukládat a požádá o obnovení stránky.
 
+Co je dobré vědět, než se všechny záložky obnoví na novou verzi:
+
+- Stránka se starší verzí otevřená až po převodu dat (třeba z mezipaměti prohlížeče) svůj klíč nenajde a začne
+  s prázdným přehledem. Data nejsou pryč: stačí stránku obnovit. Nová verze potom nabídne ke stažení a odstranění
+  i ta prázdná data, která si starší stránka mezitím uložila.
+- Data odložená stranou pod `invoo.data.v2` zabírají místo v úložišti prohlížeče. Když se kvůli tomu nepodaří uložit
+  změnu, stáhni si je a odstraň (obojí nabízí upozornění nahoře na stránce).
+- Úložiště prohlížeče neumí zamykat mezi záložkami. Uloží-li starší záložka něco přesně ve chvíli, kdy nová verze
+  po převodu odstraňuje starý klíč, může se tahle jedna změna starší záložky ztratit; nová data tím dotčená nejsou.
+
 Mezi záložkami stejné verze se změny přebírají samy; před každým uložením si záložka nejdřív načte, co mezitím
-uložila jiná, aby to nepřepsala.
+uložila jiná, aby to nepřepsala. Nová faktura, jejíž číslo si mezitím vzala faktura uložená v jiné záložce, se
+neuloží přes ni: formulář zůstane otevřený, rozepsaná faktura zůstane a Invoo řekne, že číslo už existuje.
 
 Přechod z Invokitu (dřívější název aplikace): data ze starého klíče `invokit.data.v1` i zálohy verze 1 se při prvním
 spuštění nebo při obnově automaticky převedou na aktuální verzi se stejnými částkami; starý klíč zůstává v prohlížeči
@@ -67,6 +78,10 @@ pnpm dev
 `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm build`. React, TypeScript a Vite; logika
 (částky, DPH, IBAN, QR Platba, úložiště a převod dat) je v čistých modulech v `src/domain`, `src/czech` a
 `src/storage` a pokrývají ji testy ve Vitestu, rozhraní je v `src/ui`.
+
+Formát uložených dat má číslo verze (`version`, teď 3). Každá změna, kterou by už vydaná verze Invoo neuměla přečíst,
+musí číslo zvýšit: vyšší verzi starší Invoo pozná a nechá být, kdežto data, která jen nedokáže přečíst, otevřená
+záložka ignoruje a při dalším uložení přepíše.
 
 Push do `main` nasadí aplikaci na GitHub Pages (`.github/workflows/pages.yml`). `public/CNAME` nese doménu `invoo.cz`;
 vlastní doménu je potřeba nastavit i v Settings → Pages a v DNS.

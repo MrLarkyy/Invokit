@@ -39,7 +39,9 @@ export function StorageNotice() {
   // The first write replaces the unreadable data, so it waits for the download and the user's consent.
   const resumeSaving = () => {
     const agreed = window.confirm('Zapnout ukládání? Původní data se v prohlížeči přepíšou, zůstanou jen v souboru.');
-    if (agreed && dispatch({ type: 'saving/resume' })) toast('Ukládání je zapnuté, data jsou uložená.', 'happy');
+    if (!agreed) return;
+    if (dispatch({ type: 'saving/resume' }).result === 'stored')
+      toast('Ukládání je zapnuté, data jsou uložená.', 'happy');
   };
 
   const takeBackup = () => {

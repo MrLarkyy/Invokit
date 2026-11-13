@@ -72,6 +72,11 @@ function snapshot(storage: Storage): Record<string, string | null> {
   return all;
 }
 
+function holding(entries: Record<string, string>, storage: MemoryStorage = new MemoryStorage()): MemoryStorage {
+  for (const [key, value] of Object.entries(entries)) storage.setItem(key, value);
+  return storage;
+}
+
 const KEY_PAIRS = [
   [DATA_KEY, BROKEN_DATA_KEY],
   [PREVIOUS_DATA_KEY, PREVIOUS_BROKEN_KEY],
@@ -399,49 +404,99 @@ describe('the draft', () => {
     expect(snapshot(storage)).toEqual({});
   });
 
-  it('opens a draft saved before version 3 while this version has stored none', () => {
-    const storage = new MemoryStorage();
+  it('opens a draft saved before version 3 while the data has not moved', () => {
     const before = olderDraft('2026-09-005');
-    storage.setItem(PREVIOUS_DRAFT_KEY, before);
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
     expect(loadDraft(storage)).toEqual(fixtureInvoice({ number: '2026-09-005' }));
-    expect(snapshot(storage)).toEqual({ [PREVIOUS_DRAFT_KEY]: before });
+    expect(snapshot(storage)).toEqual({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
   });
 
   it('is neither lost nor changed by what an older Invoo does with its own draft key', () => {
-    const storage = new MemoryStorage();
-    const look = { template: 'klasik' as const, accent: null, logoId: null, brandFooter: false };
-    const draft = fixtureInvoice({ appearance: look });
-    saveDraft(storage, draft);
-    const stored = storage.getItem(DRAFT_KEY);
-    // The older Invoo reads a draft without its look and stores it so with the next keystroke, ...
-    storage.setItem(PREVIOUS_DRAFT_KEY, olderDraft('2026-09-006'));
-    expect(loadDraft(storage)).toEqual(draft);
-    // ... and removes its draft key with every invoice it saves.
-    storage.removeItem(PREVIOUS_DRAFT_KEY);
-    expect(loadDraft(storage)).toEqual(draft);
-    expect(storage.getItem(DRAFT_KEY)).toBe(stored);
+    for (const moved of [false, true]) {
+      const storage = holding(moved ? { [DATA_KEY]: V3 } : { [PREVIOUS_DATA_KEY]: V2 });
+      const look = { template: 'klasik' as const, accent: null, logoId: null, brandFooter: false };
+      const draft = fixtureInvoice({ appearance: look });
+      saveDraft(storage, draft);
+      const stored = storage.getItem(DRAFT_KEY);
+      // The older Invoo reads a draft without its look and stores it so with the next keystroke, ...
+      storage.setItem(PREVIOUS_DRAFT_KEY, olderDraft('2026-09-006'));
+      expect(loadDraft(storage)).toEqual(draft);
+      // ... and removes its draft key with every invoice it saves.
+      storage.removeItem(PREVIOUS_DRAFT_KEY);
+      expect(loadDraft(storage)).toEqual(draft);
+      expect(storage.getItem(DRAFT_KEY)).toBe(stored);
+    }
   });
 
-  it('takes the previous draft along: it lives on in the stored one, and is discarded with it', () => {
-    const storage = new MemoryStorage();
-    storage.setItem(PREVIOUS_DRAFT_KEY, olderDraft('2026-09-005'));
+  it('leaves the previous draft where it is when a draft is stored, and takes it along when one is discarded', () => {
+    const before = olderDraft('2026-09-005');
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
     const edited = { ...fixtureInvoice({ number: '2026-09-005' }), note: 'Děkujeme.' };
     expect(saveDraft(storage, edited)).toBe(true);
-    expect(snapshot(storage)).toEqual({ [DRAFT_KEY]: JSON.stringify(edited) });
+    expect(loadDraft(storage)).toEqual(edited);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBe(before);
 
-    storage.setItem(PREVIOUS_DRAFT_KEY, olderDraft('2026-09-005'));
+    // Discarded, it must not come back from the previous key as the next new invoice.
     expect(saveDraft(storage, null)).toBe(true);
     expect(loadDraft(storage)).toBeNull();
-    expect(snapshot(storage)).toEqual({});
+    expect(snapshot(storage)).toEqual({ [PREVIOUS_DATA_KEY]: V2 });
   });
 
   it('keeps the previous draft when the new one cannot be stored', () => {
-    const storage = new MemoryStorage();
     const before = olderDraft('2026-09-005');
-    storage.setItem(PREVIOUS_DRAFT_KEY, before);
+    const storage = holding({ [PREVIOUS_DRAFT_KEY]: before });
     storage.failingKeys.add(DRAFT_KEY);
     expect(saveDraft(storage, fixtureInvoice())).toBe(false);
     expect(snapshot(storage)).toEqual({ [PREVIOUS_DRAFT_KEY]: before });
+  });
+
+  it('moves with the data: the draft of before stays the new invoice after the first stored write', () => {
+    const before = olderDraft('2026-09-005');
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
+    expect(writeDataText(storage, V3, V2)).toBe(true);
+    expect(snapshot(storage)).toEqual({ [DATA_KEY]: V3, [DRAFT_KEY]: before, [PREVIOUS_DRAFT_KEY]: before });
+    expect(loadDraft(storage)).toEqual(fixtureInvoice({ number: '2026-09-005' }));
+
+    // Also when the previous text had to make room first, and never over a draft of this version.
+    const tight = new QuotaStorage(DATA_KEY.length + V3.length + 2 * (DRAFT_KEY.length + before.length) + 10);
+    holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before }, tight);
+    expect(writeDataText(tight, V3, V2)).toBe(true);
+    expect(tight.getItem(DRAFT_KEY)).toBe(before);
+    const own = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
+    saveDraft(own, fixtureInvoice({ number: '2026-09-007' }));
+    expect(writeDataText(own, V3, V2)).toBe(true);
+    expect(loadDraft(own)?.number).toBe('2026-09-007');
+  });
+
+  it('is not carried when the data could not be stored: the previous draft is still read', () => {
+    const before = olderDraft('2026-09-005');
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
+    storage.failingKeys.add(DATA_KEY);
+    expect(writeDataText(storage, V3, V2)).toBe(false);
+    expect(snapshot(storage)).toEqual({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
+    expect(loadDraft(storage)?.number).toBe('2026-09-005');
+  });
+
+  it('ignores what an older Invoo opened after the move leaves under the previous draft key', () => {
+    // That Invoo finds its data key empty, migrates the Invokit data again and its last invoice as a draft.
+    const storage = holding({ [DATA_KEY]: V3, [LEGACY_DATA_KEY]: v1Data });
+    storage.setItem(PREVIOUS_DATA_KEY, olderAppData(emptyAppData()));
+    storage.setItem(PREVIOUS_DRAFT_KEY, olderDraft('2026-09-001'));
+    expect(loadDraft(storage)).toBeNull();
+    // Nothing of that tab is touched either, whatever this version does with its own draft.
+    const before = snapshot(storage);
+    saveDraft(storage, fixtureInvoice({ number: '2026-09-008' }));
+    saveDraft(storage, null);
+    expect(snapshot(storage)).toEqual(before);
+    expect(loadDraft(storage)).toBeNull();
+  });
+
+  it('is carried from the previous key by a start that stores the first data itself', () => {
+    const before = olderDraft('2026-09-005');
+    const storage = holding({ [PREVIOUS_DRAFT_KEY]: before });
+    loadAppData(storage);
+    expect(storage.getItem(DATA_KEY)).not.toBeNull();
+    expect(loadDraft(storage)).toEqual(fixtureInvoice({ number: '2026-09-005' }));
   });
 });
 

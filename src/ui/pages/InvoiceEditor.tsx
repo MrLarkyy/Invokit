@@ -261,8 +261,9 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   };
 
   /**
-   * Validates and saves; returns null (after a Czech message) when the invoice cannot be saved. `stored` is false
-   * when the invoice is kept for this visit only (saving off, write refused, storage blocked).
+   * Validates and saves; returns null (after a Czech message) when the invoice cannot be saved, also when the store
+   * rejects it. `stored` is false when the invoice is kept for this visit only (saving off, write refused, storage
+   * blocked).
    */
   const commit = (): { invoice: Invoice; stored: boolean } | null => {
     const takenIds = new Set(data.invoices.map((i) => i.id));
@@ -270,22 +271,24 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     const toSave = { ...invoice, id };
     const invalidNumber = formRef.current?.querySelector<HTMLElement>('[data-invalid-number]');
     const found = findInvoiceProblem(toSave);
-    const stored = saveProblem(data, toSave);
-    const next: EditorProblem | null = invalidNumber
-      ? { message: 'Oprav zvýrazněné číslo u položky.', targetId: invalidNumber.id }
-      : found
-        ? { message: found.message, targetId: problemTarget(found, draft.items[0]?.id ?? '') }
-        : stored
-          ? { message: stored, targetId: stored.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum' }
-          : null;
-    if (next) {
+    const refuse = (next: EditorProblem) => {
       setMobileView('form');
       setProblem(next);
       return null;
-    }
-    const inBrowser = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString() });
+    };
+    const unstorable = (message: string): EditorProblem => ({
+      message,
+      targetId: message.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum',
+    });
+    const stored = saveProblem(data, toSave, isNew);
+    if (invalidNumber) return refuse({ message: 'Oprav zvýrazněné číslo u položky.', targetId: invalidNumber.id });
+    if (found) return refuse({ message: found.message, targetId: problemTarget(found, draft.items[0]?.id ?? '') });
+    if (stored) return refuse(unstorable(stored));
+    const done = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString(), create: isNew });
+    // Another tab stored an invoice with this number meanwhile: nothing was saved, so the draft and the form stay.
+    if (done.result === 'rejected') return refuse(unstorable(done.reason));
     if (isNew) saveDraft(null);
-    return { invoice: toSave, stored: inBrowser };
+    return { invoice: toSave, stored: done.result === 'stored' };
   };
 
   const save = () => {

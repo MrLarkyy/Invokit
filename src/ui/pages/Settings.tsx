@@ -108,7 +108,11 @@ export function Settings() {
       setLogoError(error instanceof Error ? error.message : LOGO_ERRORS.unreadable);
       return;
     }
-    if (dispatch({ type: 'supplier/save', supplier: form, logo })) {
+    const done = dispatch({ type: 'supplier/save', supplier: form, logo });
+    if (done.result === 'rejected') {
+      // Another tab took the last free logo slot after this page checked.
+      setLogoError(done.reason);
+    } else if (done.result === 'stored') {
       toast('Údaje jsou uložené. Použijí se na nových fakturách, vystavené zůstávají beze změny.', 'happy');
     } else {
       toast(notStored('údaje platí'));
@@ -140,7 +144,7 @@ export function Settings() {
   const confirmRestore = () => {
     if (!pending) return;
     // A confirmed restore also resumes saving that was off: the restored data replaces the unreadable data.
-    const stored = dispatch({ type: 'backup/restore', data: pending.data });
+    const stored = dispatch({ type: 'backup/restore', data: pending.data }).result === 'stored';
     const restored = savedProfile(pending.data) ?? emptyProfile();
     setForm(restored);
     setLogo(logoUrl(pending.data.logos, restored.appearance.logoId));

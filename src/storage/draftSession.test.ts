@@ -48,8 +48,11 @@ describe('DraftSession', () => {
     expect(storage.getItem(DRAFT_KEY)).toBeNull();
 
     session.save(forCustomer('Upravený odběratel s.r.o.'), true);
-    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBeNull();
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBe(before);
     expect(new DraftSession(storage).load()?.customer.name).toBe('Upravený odběratel s.r.o.');
+    session.save(null, true);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBeNull();
+    expect(new DraftSession(storage).load()).toBeNull();
   });
 
   it('holds the draft in memory when the browser refuses the write', () => {

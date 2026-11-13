@@ -1,6 +1,6 @@
 import type { AppData } from './appData';
 import { readDataText, readPreviousText, readStoredChange, writeDataText, type LoadedAppData } from './appDataStorage';
-import { appReducer, type AppAction } from './appReducer';
+import { applyAppAction, type AppAction } from './appReducer';
 
 /** The data of this page visit, and whether its changes go to the browser storage. */
 export interface AppStore {
@@ -37,7 +37,15 @@ export type AppStoreWrite = 'saved' | 'unchanged' | 'off' | 'failed';
 export interface AppStoreChange {
   store: AppStore;
   written: AppStoreWrite;
+  /** The Czech reason the action was not applied to the data; null when it was. */
+  problem: string | null;
 }
+
+/**
+ * What became of a change, for the page that asked for it: `stored` in the browser; `kept` for this visit only
+ * (saving off, write refused, storage blocked); `rejected`, so not applied at all.
+ */
+export type AppStoreOutcome = { result: 'stored' | 'kept' } | { result: 'rejected'; reason: string };
 
 export function openAppStore(loaded: LoadedAppData): AppStore {
   return {
@@ -52,21 +60,27 @@ export function openAppStore(loaded: LoadedAppData): AppStore {
   };
 }
 
-export function appStoreReducer(store: AppStore, action: AppStoreAction): AppStore {
-  if (action.type === 'saving/resume') return store.canWrite || store.newer ? store : { ...store, canWrite: true };
-  const data = appReducer(store.data, action);
+function reduce(store: AppStore, action: AppStoreAction): { store: AppStore; problem: string | null } {
+  if (action.type === 'saving/resume') {
+    return { store: store.canWrite || store.newer ? store : { ...store, canWrite: true }, problem: null };
+  }
+  const { data, problem } = applyAppAction(store.data, action);
   const replaces = action.type === 'backup/restore' || action.type === 'data/reload';
   // A confirmed restore replaces the unreadable data; a reload means another tab already replaced it.
   const canWrite = !store.newer && (store.canWrite || replaces);
   const dataReplaced = store.dataReplaced || replaces;
   // Reloaded data is what the storage holds: a write refused earlier leaves nothing unsaved behind.
   const lastWriteFailed = store.lastWriteFailed && action.type !== 'data/reload';
-  return data === store.data &&
+  const same =
+    data === store.data &&
     canWrite === store.canWrite &&
     dataReplaced === store.dataReplaced &&
-    lastWriteFailed === store.lastWriteFailed
-    ? store
-    : { ...store, data, canWrite, dataReplaced, lastWriteFailed };
+    lastWriteFailed === store.lastWriteFailed;
+  return { store: same ? store : { ...store, data, canWrite, dataReplaced, lastWriteFailed }, problem };
+}
+
+export function appStoreReducer(store: AppStore, action: AppStoreAction): AppStore {
+  return reduce(store, action).store;
 }
 
 function takeOver(store: AppStore, data: AppData): AppStore {
@@ -110,24 +124,37 @@ export function syncAppStore(storage: Storage, store: AppStore): AppStore {
 }
 
 function write(storage: Storage, store: AppStore): AppStoreChange {
-  if (!store.canWrite) return { store, written: 'off' };
+  if (!store.canWrite) return { store, written: 'off', problem: null };
   const text = JSON.stringify(store.data);
   if (writeDataText(storage, text, store.previousText)) {
-    return { store: { ...store, lastWriteFailed: false, storedText: text, previousText: null }, written: 'saved' };
+    const stored = { ...store, lastWriteFailed: false, storedText: text, previousText: null };
+    return { store: stored, written: 'saved', problem: null };
   }
-  return { store: store.lastWriteFailed ? store : { ...store, lastWriteFailed: true }, written: 'failed' };
+  return {
+    store: store.lastWriteFailed ? store : { ...store, lastWriteFailed: true },
+    written: 'failed',
+    problem: null,
+  };
 }
 
 /**
  * Applies a change and stores its result. The store is first brought up to date (see syncAppStore), so the change
- * lands on what the storage holds now, not on what this tab last saw; `unchanged` then means the action changed
- * nothing in that data. Resuming writes the data as it is now, so what was done while saving was off is kept too;
- * the unreadable text is replaced, a copy kept aside earlier stays.
+ * lands on what the storage holds now, not on what this tab last saw. `unchanged` then means the action changed
+ * nothing in that data, and `problem` says why it could not. Resuming writes the data as it is now, so what was
+ * done while saving was off is kept too; the unreadable text is replaced, a copy kept aside earlier stays.
  */
 export function changeAppStore(storage: Storage, store: AppStore, action: AppStoreAction): AppStoreChange {
   const current = syncAppStore(storage, store);
-  const next = appStoreReducer(current, action);
-  return next === current ? { store: current, written: 'unchanged' } : write(storage, next);
+  const { store: next, problem } = reduce(current, action);
+  return next === current ? { store: current, written: 'unchanged', problem } : write(storage, next);
+}
+
+/** `persistent`: false when the browser blocks its storage, so nothing outlives the visit. */
+export function outcomeOf(change: AppStoreChange, persistent: boolean): AppStoreOutcome {
+  if (change.problem !== null) return { result: 'rejected', reason: change.problem };
+  const { canWrite, lastWriteFailed } = change.store;
+  const inStorage = change.written === 'saved' || (change.written === 'unchanged' && canWrite && !lastWriteFailed);
+  return { result: persistent && inStorage ? 'stored' : 'kept' };
 }
 
 /** Stores the data as it is now, brought up to date first: the write that follows removing the Invokit keys. */

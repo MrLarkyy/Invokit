@@ -5,7 +5,15 @@ import { computeTotals } from './invoiceTotals';
 import { createBlankInvoice } from './newInvoice';
 import { parseAppData } from '../storage/appDataSchema';
 import { LIMITS } from './limits';
-import { deleteCatalogItem, deleteCustomer, deleteInvoice, saveInvoice, saveProblem, setPaid } from './records';
+import {
+  deleteCatalogItem,
+  deleteCustomer,
+  deleteInvoice,
+  ID_TAKEN,
+  saveInvoice,
+  saveProblem,
+  setPaid,
+} from './records';
 
 const invoice = (number: string, customer = 'Odběratel Test a.s.', ico = '27410587') =>
   fixtureInvoice({
@@ -131,5 +139,33 @@ describe('limits of the saved lists', () => {
     expect(() => saveInvoice(full, next, 'a')).toThrow('nejvýš 10 000 faktur');
     expect(saveProblem(full, { ...invoices[0]!, note: 'úprava' })).toBeNull();
     expect(parseAppData(JSON.stringify(full)).invoices).toHaveLength(LIMITS.invoices);
+  });
+});
+
+describe('a new invoice next to the saved ones', () => {
+  const issued = invoice('2026-09-001');
+  const data = saveInvoice(emptyAppData(), issued, 'a', true);
+
+  it('is refused when its number is taken, whatever its id', () => {
+    const taken = 'Faktura s číslem 2026-09-001 už existuje.';
+    expect(saveProblem(data, { ...issued, note: 'z druhé záložky' }, true)).toBe(taken);
+    expect(saveProblem(data, { ...issued, id: 'other' }, true)).toBe(taken);
+    expect(() => saveInvoice(data, { ...issued, note: 'z druhé záložky' }, 'b', true)).toThrow(taken);
+  });
+
+  it('is refused when only its id is taken: it is another invoice, not an edit of that one', () => {
+    const renumbered = { ...issued, number: '2026-09-002' };
+    expect(saveProblem(data, renumbered, true)).toBe(ID_TAKEN);
+    expect(() => saveInvoice(data, renumbered, 'b', true)).toThrow(ID_TAKEN);
+    expect(saveProblem(data, renumbered, false)).toBeNull();
+    expect(saveProblem(data, renumbered)).toBeNull();
+  });
+
+  it('is saved under a free id and number, and an edit keeps replacing the invoice with its id', () => {
+    const second = saveInvoice(data, invoice('2026-09-002'), 'b', true);
+    expect(second.invoices.map((i) => i.id)).toEqual(['2026-09-002', '2026-09-001']);
+    const edited = saveInvoice(second, { ...issued, note: 'úprava' }, 'c', false);
+    expect(edited.invoices.map((i) => i.note)).toEqual(['', 'úprava']);
+    expect(saveProblem(second, { ...issued, note: 'úprava' }, false)).toBeNull();
   });
 });

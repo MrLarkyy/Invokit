@@ -14,10 +14,12 @@ import {
 import {
   changeAppStore,
   openAppStore,
+  outcomeOf,
   rewriteAppStore,
   syncAppStore,
   type AppStore,
   type AppStoreAction,
+  type AppStoreOutcome,
 } from '../storage/appStore';
 import { downloadText } from '../storage/backupFile';
 import { DraftSession } from '../storage/draftSession';
@@ -29,12 +31,12 @@ import { olderTabFileName } from './olderTabNotice';
 interface Store {
   data: AppData;
   /**
-   * Applies the action and stores the result right away. True when the data is then stored in the browser; false
-   * while saving is off, when the write was refused (a warning is shown), when the browser blocks storage and when
-   * the action changed nothing in data another tab stored meanwhile (a warning is shown), so the caller never
-   * reports an unsaved change as saved.
+   * Applies the action and stores the result right away. `stored`: the data is in the browser. `kept`: applied for
+   * this visit only (saving off, the write refused with a warning shown, storage blocked). `rejected`: not applied,
+   * with the reason, as the data another tab stored meanwhile leaves no room for it. So the caller never reports
+   * an unsaved change as saved, nor a rejected one as made.
    */
-  dispatch: (action: AppStoreAction) => boolean;
+  dispatch: (action: AppStoreAction) => AppStoreOutcome;
   /** The unsaved new invoice; null when there is none. */
   loadDraft: () => Invoice | null;
   /** Keeps the unsaved new invoice (null clears it): in the browser, or for this visit only while it cannot be written. */
@@ -66,7 +68,6 @@ interface Store {
 const StoreContext = createContext<Store | null>(null);
 
 const SAVE_FAILED = 'Data se nepodařilo uložit do prohlížeče. Stáhni si zálohu.';
-const CHANGED_ELSEWHERE = 'Data se mezitím změnila v jiné záložce a tahle změna se do nich nezapsala. Zkus to znovu.';
 
 /** Loads the data once, stores it after every change, and follows changes made in another tab. */
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -89,21 +90,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const dispatch = useCallback(
-    (action: AppStoreAction): boolean => {
-      const before = current.current;
-      const { store: next, written } = changeAppStore(storage, before, action);
-      adopt(next);
-      if (written === 'unchanged') {
-        if (next.data === before.data || action.type === 'saving/resume') return persistent && next.canWrite;
-        // The page checked the action against data another tab has replaced since.
-        toast(CHANGED_ELSEWHERE);
-        return false;
-      }
-      if (written === 'failed') {
+    (action: AppStoreAction): AppStoreOutcome => {
+      const change = changeAppStore(storage, current.current, action);
+      adopt(change.store);
+      if (change.written === 'failed') {
         toast(SAVE_FAILED);
         if (hasLegacyData(storage)) setLegacyBlocking(true);
       }
-      return persistent && written === 'saved';
+      return outcomeOf(change, persistent);
     },
     [adopt, persistent, storage, toast],
   );

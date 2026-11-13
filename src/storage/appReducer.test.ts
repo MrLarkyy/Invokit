@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { defaultAppearance } from '../domain/invoiceAppearance';
-import { logoUrl } from '../domain/logos';
+import { logoUrl, TOO_MANY_LOGOS } from '../domain/logos';
+import { ID_TAKEN } from '../domain/records';
 import { createBlankInvoice } from '../domain/newInvoice';
 import { fullLogoData, printedLogos } from '../test/fullLogoData';
 import { FIXTURE_LOGO, fixtureInvoice, fixtureLogo, fixtureProfile } from '../test/invoiceFixture';
 import { emptyAppData, type AppData } from './appData';
 import { parseAppData } from './appDataSchema';
-import { appReducer, type AppAction } from './appReducer';
+import { appReducer, applyAppAction, INVOICE_GONE, type AppAction } from './appReducer';
 
 const saved = (): AppData =>
-  appReducer(emptyAppData(), { type: 'invoice/save', invoice: fixtureInvoice(), now: '2026-09-02T10:00:00Z' });
+  appReducer(emptyAppData(), {
+    type: 'invoice/save',
+    invoice: fixtureInvoice(),
+    now: '2026-09-02T10:00:00Z',
+    create: true,
+  });
 
 describe('appReducer', () => {
   it('saves, marks paid and deletes an invoice', () => {
@@ -21,10 +27,51 @@ describe('appReducer', () => {
     expect(data.invoices).toEqual([]);
   });
 
-  it('leaves the data as is when a save is rejected', () => {
+  it('leaves the data as is when a save is rejected, and says why', () => {
     const data = saved();
     const duplicate = { ...fixtureInvoice(), id: 'other' };
-    expect(appReducer(data, { type: 'invoice/save', invoice: duplicate, now: 'b' })).toBe(data);
+    for (const create of [true, false]) {
+      const action: AppAction = { type: 'invoice/save', invoice: duplicate, now: 'b', create };
+      expect(appReducer(data, action)).toBe(data);
+      expect(applyAppAction(data, action)).toEqual({ data, problem: 'Faktura s číslem 2026-09-001 už existuje.' });
+    }
+  });
+
+  it('saves an edited invoice in place of its older version, and never a new one in place of another', () => {
+    const data = saved();
+    const edited = { ...fixtureInvoice(), note: 'Děkujeme.' };
+    const asEdit = applyAppAction(data, { type: 'invoice/save', invoice: edited, now: 'b', create: false });
+    expect(asEdit.problem).toBeNull();
+    expect(asEdit.data.invoices.map((i) => i.note)).toEqual(['Děkujeme.']);
+
+    // A new invoice with the id and number of a saved one: two tabs were offered the same next number.
+    const asNew = applyAppAction(data, { type: 'invoice/save', invoice: edited, now: 'b', create: true });
+    expect(asNew).toEqual({ data, problem: 'Faktura s číslem 2026-09-001 už existuje.' });
+    // The same id under another number is still another invoice.
+    const renumbered = { ...edited, number: '2026-09-002' };
+    expect(applyAppAction(data, { type: 'invoice/save', invoice: renumbered, now: 'b', create: true })).toEqual({
+      data,
+      problem: ID_TAKEN,
+    });
+    expect(
+      applyAppAction(data, { type: 'invoice/save', invoice: renumbered, now: 'b', create: false }).data.invoices,
+    ).toHaveLength(1);
+  });
+
+  it('leaves the data as is for an invoice that is no longer there', () => {
+    const data = saved();
+    const gone = { data, problem: INVOICE_GONE };
+    expect(applyAppAction(data, { type: 'invoice/setPaid', id: 'smazana', paidAt: '2026-09-10' })).toEqual(gone);
+    expect(applyAppAction(data, { type: 'invoice/delete', id: 'smazana' })).toEqual(gone);
+  });
+
+  it('reports no problem for an action that is applied or has nothing to change', () => {
+    const data = saved();
+    expect(
+      applyAppAction(data, { type: 'invoice/setPaid', id: '2026-09-001', paidAt: '2026-09-10' }).problem,
+    ).toBeNull();
+    expect(applyAppAction(data, { type: 'customer/delete', customer: fixtureInvoice().customer }).problem).toBeNull();
+    expect(applyAppAction(data, { type: 'backup/exported', at: '2026-09-30' }).problem).toBeNull();
   });
 
   it('saves the profile as a copy', () => {
@@ -37,7 +84,7 @@ describe('appReducer', () => {
   it('never changes a saved invoice when the default look, accent, logo or footer change', () => {
     let data = appReducer(emptyAppData(), { type: 'supplier/save', supplier: fixtureProfile(), logo: FIXTURE_LOGO });
     const issued = createBlankInvoice(data, '2026-09-02', () => 'r1');
-    data = appReducer(data, { type: 'invoice/save', invoice: issued, now: '2026-09-02T10:00:00Z' });
+    data = appReducer(data, { type: 'invoice/save', invoice: issued, now: '2026-09-02T10:00:00Z', create: true });
     const before = structuredClone(data.invoices[0]!);
     expect(before.appearance).toEqual({ template: 'invoo', accent: null, logoId: 'logo-1', brandFooter: true });
     const changed = fixtureProfile({
@@ -57,7 +104,7 @@ describe('appReducer', () => {
 
   it('saves an invoice naming a logo that is no longer stored without it', () => {
     const invoice = fixtureInvoice({ appearance: { ...defaultAppearance(), logoId: 'logo-5' } });
-    const data = appReducer(emptyAppData(), { type: 'invoice/save', invoice, now: 'a' });
+    const data = appReducer(emptyAppData(), { type: 'invoice/save', invoice, now: 'a', create: true });
     expect(data.invoices[0]?.appearance.logoId).toBeNull();
   });
 
@@ -67,6 +114,7 @@ describe('appReducer', () => {
       type: 'invoice/save',
       invoice: createBlankInvoice(data, '2026-09-02', () => 'r1'),
       now: 'a',
+      create: true,
     });
     data = appReducer(data, { type: 'supplier/save', supplier: fixtureProfile(), logo: null });
     expect(data.logos).toHaveLength(1);
@@ -124,8 +172,9 @@ describe('logos the invoices print, with every logo slot taken', () => {
 
   it('refuses one logo too many without changing anything', () => {
     const full = fullLogoData();
-    const refused = appReducer(full, { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(21) });
-    expect(refused).toBe(full);
+    const oneTooMany: AppAction = { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(21) };
+    expect(appReducer(full, oneTooMany)).toBe(full);
+    expect(applyAppAction(full, oneTooMany)).toEqual({ data: full, problem: TOO_MANY_LOGOS });
   });
 
   it('keeps every logo an invoice or the profile prints through saves, refusals and removals', () => {
@@ -136,7 +185,7 @@ describe('logos the invoices print, with every logo slot taken', () => {
       { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(21) },
       { type: 'supplier/save', supplier: fixtureProfile({ email: 'fakturace@ukazka.example' }), logo: fixtureLogo(3) },
       { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(22) },
-      { type: 'invoice/save', invoice: { ...blank, id: 'new', number: '2026-09-050' }, now: 'a' },
+      { type: 'invoice/save', invoice: { ...blank, id: 'new', number: '2026-09-050' }, now: 'a', create: true },
       {
         type: 'invoice/save',
         invoice: fixtureInvoice({
@@ -145,6 +194,7 @@ describe('logos the invoices print, with every logo slot taken', () => {
           appearance: { ...defaultAppearance(), logoId: 'logo-77' },
         }),
         now: 'b',
+        create: true,
       },
       { type: 'supplier/save', supplier: fixtureProfile(), logo: null },
       { type: 'supplier/save', supplier: fixtureProfile(), logo: fixtureLogo(23) },

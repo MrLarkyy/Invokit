@@ -11,8 +11,10 @@ import { migrateDraftV1 } from './migrateV1';
 export const DATA_KEY = 'invoo.data.v3';
 export const BROKEN_DATA_KEY = 'invoo.data.v3.broken';
 export const DRAFT_KEY = 'invoo.draft.v3';
-// Read until the first stored write under the data key, which removes them. Never written, except to put the very
-// same text back when that first write does not fit.
+// Read until the first stored write under the data key, which removes the previous data and takes the draft along.
+// The previous data key is never written, except to put the very same text back when that first write does not
+// fit; text found there later was saved by an older Invoo and is only offered to the user (it counts against the
+// quota until it is removed). An older Invoo opened after the move finds its key empty and starts empty.
 export const PREVIOUS_DATA_KEY = 'invoo.data.v2';
 export const PREVIOUS_BROKEN_KEY = 'invoo.data.v2.broken';
 export const PREVIOUS_DRAFT_KEY = 'invoo.draft.v2';
@@ -20,6 +22,9 @@ export const PREVIOUS_DRAFT_KEY = 'invoo.draft.v2';
 export const LEGACY_DATA_KEY = 'invokit.data.v1';
 export const LEGACY_DRAFT_KEY = 'invokit.draft.v1';
 
+// A change of the stored shape that an Invoo already released would refuse to read has to raise this number: a
+// higher version is recognised and left alone, while text that is merely unreadable is ignored by an open tab and
+// replaced by its next save.
 const CURRENT_VERSION: AppData['version'] = 3;
 
 export interface LoadedAppData {
@@ -83,6 +88,12 @@ function isNewer(text: string): boolean {
   return typeof version === 'number' && version > CURRENT_VERSION;
 }
 
+/** The draft of before the move stays readable after it: from then on the previous draft key is no longer read. */
+function carryPreviousDraft(storage: Storage): void {
+  const previous = read(storage, PREVIOUS_DRAFT_KEY);
+  if (previous !== null && read(storage, DRAFT_KEY) === null) write(storage, DRAFT_KEY, previous);
+}
+
 /**
  * Stores the text of the data under the data key; false when the browser refuses (private mode, full quota). The
  * caller has just read the key, so what it replaces is known to it.
@@ -91,16 +102,23 @@ function isNewer(text: string): boolean {
  * was read from. Once the data is stored, the previous key is removed if it still holds that text; anything else
  * there was saved by an older Invoo since and stays. When both texts do not fit, the previous one makes room first
  * and is put back unchanged if the write is refused again.
+ *
+ * Nothing locks the storage across tabs, and an older Invoo would take no lock anyway: comparing the previous text
+ * right before removing it keeps the time in which a save of that tab could be removed unseen to these two calls.
  */
 export function writeDataText(storage: Storage, text: string, previousText: string | null): boolean {
   if (read(storage, DATA_KEY) !== null) return write(storage, DATA_KEY, text);
   const superseded = () => previousText !== null && read(storage, PREVIOUS_DATA_KEY) === previousText;
   if (write(storage, DATA_KEY, text)) {
     if (superseded()) remove(storage, PREVIOUS_DATA_KEY);
+    carryPreviousDraft(storage);
     return true;
   }
   if (previousText === null || !superseded() || !remove(storage, PREVIOUS_DATA_KEY)) return false;
-  if (write(storage, DATA_KEY, text)) return true;
+  if (write(storage, DATA_KEY, text)) {
+    carryPreviousDraft(storage);
+    return true;
+  }
   // An older Invoo may have saved in between: its text is newer than the one taken away.
   if (read(storage, PREVIOUS_DATA_KEY) === null) write(storage, PREVIOUS_DATA_KEY, previousText);
   return false;
@@ -196,7 +214,7 @@ export function loadAppData(storage: Storage): LoadedAppData {
   }
   migrateLegacyDraft(storage, data);
   const text = JSON.stringify(data);
-  const saved = write(storage, DATA_KEY, text);
+  const saved = writeDataText(storage, text, null);
   return loaded(data, { legacyBlocking: legacy !== null && !saved, storedText: saved ? text : null });
 }
 
@@ -234,26 +252,29 @@ export function removeLegacyData(storage: Storage): boolean {
   }
 }
 
+/** While nothing is under the data key, the previous keys are still this version's source, the draft key too. */
+function beforeMove(storage: Storage): boolean {
+  return read(storage, DATA_KEY) === null;
+}
+
 /**
- * The unsaved new invoice; null when there is none or it is not valid. One an Invoo from before version 3 left
- * under the previous draft key is read while this version has stored none.
+ * The unsaved new invoice; null when there is none or it is not valid. The draft an Invoo from before version 3
+ * left is read only until the data moves (the move takes it along): what lies under the previous draft key later
+ * was put there by an older Invoo opened since, such as the last Invokit invoice it migrates as a draft again.
  */
 export function loadDraft(storage: Storage): Invoice | null {
-  const raw = read(storage, DRAFT_KEY) ?? read(storage, PREVIOUS_DRAFT_KEY);
+  const raw = read(storage, DRAFT_KEY) ?? (beforeMove(storage) ? read(storage, PREVIOUS_DRAFT_KEY) : null);
   return raw === null ? null : parseDraft(raw);
 }
 
 /**
  * Stores the draft, or removes it for null; false when the browser refuses. The draft has its own key: an older
- * Invoo reads a draft without its look and removes its draft key with every invoice it saves. The previous draft
- * goes with either: it lives on in the stored one, or was discarded with it.
+ * Invoo reads a draft without its look and removes its draft key with every invoice it saves. A discarded draft
+ * takes the previous one with it while that one is still read; otherwise it would come back as the next new
+ * invoice.
  */
 export function saveDraft(storage: Storage, draft: Invoice | null): boolean {
-  if (draft) {
-    if (!write(storage, DRAFT_KEY, JSON.stringify(draft))) return false;
-    remove(storage, PREVIOUS_DRAFT_KEY);
-    return true;
-  }
+  if (draft) return write(storage, DRAFT_KEY, JSON.stringify(draft));
   const removed = remove(storage, DRAFT_KEY);
-  return remove(storage, PREVIOUS_DRAFT_KEY) && removed;
+  return (!beforeMove(storage) || remove(storage, PREVIOUS_DRAFT_KEY)) && removed;
 }
