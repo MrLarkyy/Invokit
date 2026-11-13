@@ -1,5 +1,5 @@
 {
-  "name": "invokit",
+  "name": "invoo",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.11.2",
@@ -18,8 +18,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
     "prettier": "^3.9.10",
     "typescript": "~6.0.3",
@@ -28,6 +32,10 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
-    "qrcode-generator": "^2.0.4"
+    "@fontsource-variable/fredoka": "^5.3.0",
+    "@fontsource-variable/nunito": "^5.3.0",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
