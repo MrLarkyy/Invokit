@@ -1,4 +1,4 @@
-import '@fontsource-variable/fredoka/wght.css';
+import '@fontsource-variable/baloo-2/wght.css';
 import '@fontsource-variable/nunito/wght.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
