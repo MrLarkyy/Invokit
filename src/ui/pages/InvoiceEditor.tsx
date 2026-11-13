@@ -19,7 +19,6 @@ import { centsToInput, formatCzk, formatQuantity } from '../../domain/money';
 import { createBlankInvoice, newItem, refreshDraft } from '../../domain/newInvoice';
 import { byDescription, byName, saveProblem } from '../../domain/records';
 import { completeSupplierSnapshot, savedProfile, snapshotOf } from '../../domain/supplierProfile';
-import { loadDraft, saveDraft } from '../../storage/appDataStorage';
 import { newRowId, todayIso } from '../clock';
 import { AdSlot } from '../components/AdSlot';
 import { DecimalInput } from '../components/DecimalInput';
@@ -180,13 +179,13 @@ function withoutLegacy(item: InvoiceItem, changes: Partial<InvoiceItem>): Invoic
 }
 
 export function InvoiceEditor({ editId }: { editId?: string }) {
-  const { data, dispatch, storage, canWrite } = useStore();
+  const { data, dispatch, loadDraft, saveDraft } = useStore();
   const toast = useToast();
   const isNew = editId === undefined;
   const existing = isNew ? undefined : data.invoices.find((invoice) => invoice.id === editId);
   const [initial] = useState<Invoice>(() => {
     if (existing) return structuredClone(existing);
-    const stored = loadDraft(storage);
+    const stored = loadDraft();
     return stored ? refreshDraft(stored, data, todayIso()) : createBlankInvoice(data, todayIso(), newRowId);
   });
   const [draft, setDraftState] = useState(initial);
@@ -199,10 +198,11 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   };
   useDocumentTitle(existing ? `Úprava faktury ${existing.number}` : 'Nová faktura');
 
-  // The unsaved new invoice survives a reload once the user changed something; a refused write only loses that.
+  // The unsaved new invoice survives a reload once the user changed something (this visit only while it cannot be
+  // written to the browser).
   useEffect(() => {
-    if (isNew && canWrite && draft !== initial) saveDraft(storage, draft);
-  }, [isNew, canWrite, draft, initial, storage]);
+    if (isNew && draft !== initial) saveDraft(draft);
+  }, [isNew, draft, initial, saveDraft]);
 
   // A refused save points at its field: marked, announced and focused.
   useEffect(() => {
@@ -275,7 +275,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
       return null;
     }
     const inBrowser = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString() });
-    if (isNew && canWrite) saveDraft(storage, null);
+    if (isNew) saveDraft(null);
     return { invoice: toSave, stored: inBrowser };
   };
 
@@ -302,7 +302,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
 
   const discard = () => {
     if (isNew) {
-      if (canWrite) saveDraft(storage, null);
+      saveDraft(null);
       navigate({ name: 'faktury' });
     } else {
       navigate({ name: 'faktura', id: invoice.id });

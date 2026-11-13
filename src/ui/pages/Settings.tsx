@@ -9,7 +9,6 @@ import { createBlankInvoice } from '../../domain/newInvoice';
 import { byDescription, byName } from '../../domain/records';
 import { emptyProfile, profileAccount, savedProfile, type SupplierProfile } from '../../domain/supplierProfile';
 import type { AppData } from '../../storage/appData';
-import { loadDraft, saveDraft } from '../../storage/appDataStorage';
 import { backupFileName, downloadBackup, readBackup } from '../../storage/backupFile';
 import { newRowId, todayIso } from '../clock';
 import { CUSTOMERS, czechPlural, INVOICES } from '../czechPlural';
@@ -49,7 +48,7 @@ function ibanPreview(profile: SupplierProfile): string {
 }
 
 export function Settings() {
-  const { data, dispatch, storage, persistent, canWrite } = useStore();
+  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite } = useStore();
   const toast = useToast();
   const [saved] = useState(() => savedProfile(data) ?? emptyProfile());
   const [form, setForm] = useState<SupplierProfile>(saved);
@@ -108,8 +107,8 @@ export function Settings() {
   };
 
   const newInvoiceFor = (customer: Party) => {
-    const draft = loadDraft(storage) ?? createBlankInvoice(data, todayIso(), newRowId);
-    if (canWrite) saveDraft(storage, { ...draft, customer: { ...customer } });
+    const draft = loadDraft() ?? createBlankInvoice(data, todayIso(), newRowId);
+    saveDraft({ ...draft, customer: { ...customer } });
     navigate({ name: 'nova' });
   };
 

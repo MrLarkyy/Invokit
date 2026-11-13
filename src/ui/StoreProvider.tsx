@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { Invoice } from '../domain/invoice';
 import type { AppData } from '../storage/appData';
 import { parseAppData } from '../storage/appDataSchema';
 import {
@@ -10,6 +11,7 @@ import {
   type LoadedAppData,
 } from '../storage/appDataStorage';
 import { appStoreReducer, openAppStore, writeAppStore, type AppStoreAction } from '../storage/appStore';
+import { DraftSession } from '../storage/draftSession';
 import { browserStorage } from './browserStorage';
 import { useToast } from './components/Toast';
 
@@ -21,8 +23,10 @@ interface Store {
    * the caller never reports an unsaved change as saved.
    */
   dispatch: (action: AppStoreAction) => boolean;
-  /** The browser storage, or the in-memory stand-in. */
-  storage: Storage;
+  /** The unsaved new invoice; null when there is none. */
+  loadDraft: () => Invoice | null;
+  /** Keeps the unsaved new invoice (null clears it): in the browser, or for this visit only while it cannot be written. */
+  saveDraft: (draft: Invoice | null) => void;
   /** False when the browser blocks localStorage (nothing survives the visit). */
   persistent: boolean;
   /** False while unreadable data has no safe copy: nothing is written until the user resumes saving. */
@@ -47,6 +51,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [legacyBlocking, setLegacyBlocking] = useState(loaded.legacyBlocking);
   const [store, setStore] = useState(() => openAppStore(loaded));
   const current = useRef(store);
+  const [drafts] = useState(() => new DraftSession(storage));
+  const { canWrite } = store;
+  const loadDraft = useCallback(() => drafts.load(), [drafts]);
+  // A new function once saving resumes, so the open editor writes its draft again.
+  const saveDraft = useCallback((draft: Invoice | null) => drafts.save(draft, canWrite), [drafts, canWrite]);
 
   const dispatch = useCallback(
     (action: AppStoreAction): boolean => {
@@ -93,9 +102,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       value={{
         data: store.data,
         dispatch,
-        storage,
+        loadDraft,
+        saveDraft,
         persistent,
-        canWrite: store.canWrite,
+        canWrite,
         loaded,
         legacyBlocking,
         removeLegacy,
