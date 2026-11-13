@@ -15,6 +15,7 @@ import {
   openAppStore,
   settleAppStore,
   writeAppStore,
+  type AppStore,
   type AppStoreAction,
 } from '../storage/appStore';
 import { DraftSession } from '../storage/draftSession';
@@ -41,8 +42,8 @@ interface Store {
   dataReplaced: boolean;
   /** The browser refused the last write. */
   lastWriteFailed: boolean;
-  /** Another tab runs an older Invoo and wrote its data over this one's (which this tab then wrote back). */
-  olderTab: boolean;
+  /** Another tab runs an older Invoo: its data was taken over, or it overwrote current data (then written back). */
+  olderTab: AppStore['olderTab'];
   /** How loading went (unreadable data, Invokit data that does not fit). */
   loaded: LoadedAppData;
   /** The Invokit data is the only copy because the new data does not fit into the browser storage. */
@@ -87,12 +88,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [persistent, storage, toast],
   );
 
-  // Another tab wrote the data: current data is taken over, an older Invoo's is overwritten (see followOtherTab).
+  // Another tab wrote the data: it is taken over, or undone when an older Invoo overwrote current data (see
+  // followOtherTab).
   useEffect(() => {
     if (!persistent) return;
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea !== storage || event.key !== DATA_KEY || event.newValue === null) return;
-      const next = followOtherTab(storage, current.current, event.newValue);
+      const next = followOtherTab(storage, current.current, event.newValue, event.oldValue);
       if (next === current.current) return;
       current.current = next;
       setStore(next);

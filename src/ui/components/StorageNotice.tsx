@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { downloadBackup, downloadText } from '../../storage/backupFile';
 import { todayIso } from '../clock';
+import { olderTabNotice } from '../olderTabNotice';
 import { useStore } from '../StoreProvider';
 import { IconAlert, IconDownload } from './Icons';
 import { useToast } from './Toast';
@@ -10,8 +11,18 @@ import { useToast } from './Toast';
  * open in another tab.
  */
 export function StorageNotice() {
-  const { data, dispatch, persistent, canWrite, dataReplaced, olderTab, loaded, legacyBlocking, removeLegacy } =
-    useStore();
+  const {
+    data,
+    dispatch,
+    persistent,
+    canWrite,
+    dataReplaced,
+    lastWriteFailed,
+    olderTab,
+    loaded,
+    legacyBlocking,
+    removeLegacy,
+  } = useStore();
   const toast = useToast();
   const [backupTaken, setBackupTaken] = useState(false);
   const [originalTaken, setOriginalTaken] = useState(false);
@@ -93,13 +104,10 @@ export function StorageNotice() {
         </div>
       ) : null}
 
-      {olderTab ? (
+      {olderTab !== null ? (
         <div className="container banner" role="alert">
           <IconAlert size={18} />
-          <p>
-            Invoo je otevřené i ve starší verzi v jiné záložce a přepsalo uložená data. Tady zůstala data aktuální a
-            znovu se uložila. Tu druhou záložku obnov, jinak může data zase přepsat; co jsi v ní změnil, se neuložilo.
-          </p>
+          <p>{olderTabNotice(olderTab, canWrite && !lastWriteFailed)}</p>
         </div>
       ) : null}
 

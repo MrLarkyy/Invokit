@@ -14,8 +14,16 @@ export interface AppStore {
   dataReplaced: boolean;
   /** The last attempt to store a change was refused by the browser. */
   lastWriteFailed: boolean;
-  /** Another tab still runs an Invoo from before schema version 3 and wrote its older data over this one's. */
-  olderTab: boolean;
+  /**
+   * The browser storage held data in the current schema during this visit: loaded so, written here, or taken over
+   * from another current tab. An older Invoo cannot read such data, so whatever it writes afterwards lacks it.
+   */
+  storedCurrent: boolean;
+  /**
+   * Another tab still runs an Invoo from before schema version 3: `followed` when its data was taken over (the
+   * storage had held nothing newer), `overwrote` when it wrote over current data, which this tab then put back.
+   */
+  olderTab: 'followed' | 'overwrote' | null;
 }
 
 /** `saving/resume`: the user downloaded the unreadable data and agreed to have it replaced. */
@@ -24,13 +32,14 @@ export type AppStoreAction = AppAction | { type: 'saving/resume' };
 /** What a change did in the browser storage: `off` while saving is switched off, `failed` when the browser refused. */
 export type AppStoreWrite = 'saved' | 'unchanged' | 'off' | 'failed';
 
-export function openAppStore(loaded: Pick<LoadedAppData, 'data' | 'readOnly'>): AppStore {
+export function openAppStore(loaded: Pick<LoadedAppData, 'data' | 'readOnly' | 'storedCurrent'>): AppStore {
   return {
     data: loaded.data,
     canWrite: !loaded.readOnly,
     dataReplaced: false,
     lastWriteFailed: false,
-    olderTab: false,
+    storedCurrent: loaded.storedCurrent,
+    olderTab: null,
   };
 }
 
@@ -45,23 +54,47 @@ export function appStoreReducer(store: AppStore, action: AppStoreAction): AppSto
     : { ...store, data, canWrite, dataReplaced };
 }
 
-/** Notes the outcome of a write in the store; other outcomes leave it as it is. */
+/**
+ * Notes the outcome of a write in the store; other outcomes leave it as it is. What is written is in the current
+ * schema, so a stored write also means the storage holds current data.
+ */
 export function settleAppStore(store: AppStore, written: AppStoreWrite): AppStore {
   if (written !== 'saved' && written !== 'failed') return store;
   const lastWriteFailed = written === 'failed';
-  return lastWriteFailed === store.lastWriteFailed ? store : { ...store, lastWriteFailed };
+  const storedCurrent = store.storedCurrent || written === 'saved';
+  return lastWriteFailed === store.lastWriteFailed && storedCurrent === store.storedCurrent
+    ? store
+    : { ...store, lastWriteFailed, storedCurrent };
+}
+
+function takeOver(store: AppStore, data: AppData): AppStore {
+  return appStoreReducer(store, { type: 'data/reload', data });
 }
 
 /**
- * Follows a write of another tab to the data key. Current data is taken over without writing it back. Data an older
- * Invoo wrote is never taken over: it lacks the looks and logos and would drop invoices saved here since, so this
- * tab writes its own data back and notes the older tab, for a warning. Anything unreadable is ignored.
+ * Follows a write of another tab to the data key: `text` is what it wrote, `replaced` what the key held before.
+ * Anything unreadable is ignored. Current data is taken over without writing it back.
+ *
+ * Data an older Invoo wrote is taken over the same way while the storage has held nothing newer: that tab read all
+ * there was, so writing over it would drop what the user saved there. Once current data was stored, the older tab
+ * cannot have read it (looks, logos, invoices saved since) and its write is undone: the current data is written
+ * back and the older tab noted, for a warning. That the storage held current data is known from this visit, not
+ * only from `replaced`: after a refused write-back, or with two older writes in a row, `replaced` is the older
+ * tab's own text.
  */
-export function followOtherTab(storage: Storage, store: AppStore, text: string): AppStore {
+export function followOtherTab(storage: Storage, store: AppStore, text: string, replaced: string | null): AppStore {
   const change = readStoredChange(text);
-  if (change.kind === 'current') return appStoreReducer(store, { type: 'data/reload', data: change.data });
   if (change.kind === 'unreadable') return store;
-  const noted = store.olderTab ? store : { ...store, olderTab: true };
+  if (change.kind === 'current') return { ...takeOver(store, change.data), storedCurrent: true };
+  // What was overwritten matters only while this tab knows of no stored current data: then it may be data this tab
+  // never saw (written and overwritten before it listened), which is the newest there is.
+  const before = store.storedCurrent || replaced === null ? null : readStoredChange(replaced);
+  const unseen = before?.kind === 'current' ? before.data : null;
+  if (!store.storedCurrent && unseen === null) {
+    return change.data === null ? store : { ...takeOver(store, change.data), olderTab: 'followed' };
+  }
+  const kept = unseen === null ? store : takeOver(store, unseen);
+  const noted: AppStore = { ...kept, storedCurrent: true, olderTab: 'overwrote' };
   if (!noted.canWrite) return noted;
   return settleAppStore(noted, saveAppData(storage, noted.data) ? 'saved' : 'failed');
 }

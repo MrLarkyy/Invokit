@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_LOGO, fixtureInvoice } from '../test/invoiceFixture';
+import { olderAppData } from '../test/olderAppData';
 import { emptyAppData } from './appData';
 import {
   BROKEN_DATA_KEY,
@@ -156,6 +157,30 @@ describe('stored data from before version 3', () => {
     expect(saveAppData(storage, data)).toBe(true);
     expect(loadAppData(storage).data).toEqual(data);
   });
+
+  it('tells whether the data key holds the current schema, and leaves older text as it is stored', () => {
+    const fresh = new MemoryStorage();
+    expect(loadAppData(fresh).storedCurrent).toBe(true);
+    expect(loadAppData(fresh).storedCurrent).toBe(true);
+
+    const older = new MemoryStorage();
+    const v2 = olderAppData({ ...emptyAppData(), invoices: [fixtureInvoice()] });
+    older.setItem(DATA_KEY, v2);
+    expect(loadAppData(older)).toMatchObject({ recovered: false, storedCurrent: false });
+    expect(older.getItem(DATA_KEY)).toBe(v2);
+
+    const corrupt = new MemoryStorage();
+    corrupt.setItem(DATA_KEY, CORRUPT);
+    expect(loadAppData(corrupt).storedCurrent).toBe(false);
+
+    const legacy = new MemoryStorage();
+    legacy.setItem(LEGACY_DATA_KEY, v1Data);
+    expect(loadAppData(legacy).storedCurrent).toBe(true);
+
+    const full = new MemoryStorage();
+    full.failWrites = true;
+    expect(loadAppData(full).storedCurrent).toBe(false);
+  });
 });
 
 describe('saveAppData and the draft', () => {
@@ -198,12 +223,12 @@ describe('readStoredChange', () => {
   it('tells current data, data of an older Invoo and unreadable text apart', () => {
     const v3 = { ...emptyAppData(), invoices: [fixtureInvoice()] };
     expect(readStoredChange(JSON.stringify(v3))).toEqual({ kind: 'current', data: v3 });
-    const v2 = JSON.parse(JSON.stringify(v3)) as Record<string, unknown> & { invoices: Record<string, unknown>[] };
-    v2.version = 2;
-    delete v2.logos;
-    delete v2.invoices[0]!.appearance;
-    expect(readStoredChange(JSON.stringify(v2))).toEqual({ kind: 'older' });
-    expect(readStoredChange(v1Data)).toEqual({ kind: 'older' });
+    // An older Invoo's data comes migrated: the default look, no logos.
+    expect(readStoredChange(olderAppData(v3))).toEqual({ kind: 'older', data: v3 });
+    const fromV1 = readStoredChange(v1Data);
+    expect(fromV1.kind === 'older' && fromV1.data?.invoices.map((i) => i.number)).toEqual(['2026-09-001']);
+    expect(readStoredChange('{"version":2}')).toEqual({ kind: 'older', data: null });
+    expect(readStoredChange('{"version":2,"invoices":"broken"}')).toEqual({ kind: 'older', data: null });
     expect(readStoredChange(CORRUPT)).toEqual({ kind: 'unreadable' });
     expect(readStoredChange('{"version":3,"invoices":"broken"}')).toEqual({ kind: 'unreadable' });
     expect(readStoredChange(JSON.stringify({ ...v3, version: 4 }))).toEqual({ kind: 'unreadable' });

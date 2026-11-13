@@ -14,6 +14,8 @@ export const DRAFT_KEY = 'invoo.draft.v2';
 export const LEGACY_DATA_KEY = 'invokit.data.v1';
 export const LEGACY_DRAFT_KEY = 'invokit.draft.v1';
 
+const CURRENT_VERSION: AppData['version'] = 3;
+
 export interface LoadedAppData {
   data: AppData;
   /** The stored data could not be read: the app starts empty and says so. */
@@ -24,6 +26,11 @@ export interface LoadedAppData {
   readOnly: boolean;
   /** The Invokit data was migrated but could not be written (storage full): the old key is the only copy. */
   legacyBlocking: boolean;
+  /**
+   * The data key holds the current schema: read so, or written just now. Older data is migrated in memory only and
+   * stays as it is stored until the first change.
+   */
+  storedCurrent: boolean;
 }
 
 function read(storage: Storage, key: string): string | null {
@@ -64,7 +71,24 @@ function migrateLegacyDraft(storage: Storage, data: AppData): void {
 }
 
 function unreadable(text: string, readOnly: boolean): LoadedAppData {
-  return { data: emptyAppData(), recovered: true, unreadableText: text, readOnly, legacyBlocking: false };
+  return {
+    data: emptyAppData(),
+    recovered: true,
+    unreadableText: text,
+    readOnly,
+    legacyBlocking: false,
+    storedCurrent: false,
+  };
+}
+
+/** The schema version a stored text names; undefined when it is not a JSON object. */
+function storedVersion(text: string): unknown {
+  try {
+    const value: unknown = JSON.parse(text);
+    return isRecord(value) ? own(value, 'version') : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -83,6 +107,7 @@ export function loadAppData(storage: Storage): LoadedAppData {
         unreadableText: null,
         readOnly: false,
         legacyBlocking: false,
+        storedCurrent: storedVersion(raw) === CURRENT_VERSION,
       };
     } catch {
       const kept = read(storage, BROKEN_DATA_KEY);
@@ -102,31 +127,39 @@ export function loadAppData(storage: Storage): LoadedAppData {
   }
   migrateLegacyDraft(storage, data);
   const saved = saveAppData(storage, data);
-  return { data, recovered: false, unreadableText: null, readOnly: false, legacyBlocking: legacy !== null && !saved };
+  return {
+    data,
+    recovered: false,
+    unreadableText: null,
+    readOnly: false,
+    legacyBlocking: legacy !== null && !saved,
+    storedCurrent: saved,
+  };
 }
 
 /** What another tab wrote under DATA_KEY. */
 export type StoredDataChange =
   | { kind: 'current'; data: AppData }
-  /** An Invoo from before schema version 3 is still open and wrote its own, older data. */
-  | { kind: 'older' }
+  /**
+   * An Invoo from before schema version 3 is still open and wrote its own, older data: here migrated to the current
+   * schema, or null when it does not pass the checks.
+   */
+  | { kind: 'older'; data: AppData | null }
   | { kind: 'unreadable' };
 
-/** Sorts what another tab wrote: current data to take over, data of an older Invoo, or something unreadable. */
+/** Sorts a text of the data key: current data, data of an older Invoo, or something unreadable. */
 export function readStoredChange(text: string): StoredDataChange {
-  let value: unknown;
+  const version = storedVersion(text);
+  const older = version === 1 || version === 2;
+  if (!older && version !== CURRENT_VERSION) return { kind: 'unreadable' };
+  let data: AppData | null = null;
   try {
-    value = JSON.parse(text);
+    data = parseAppData(text);
   } catch {
-    return { kind: 'unreadable' };
+    // Left null: an older text is told apart by its version alone.
   }
-  const version = isRecord(value) ? own(value, 'version') : undefined;
-  if (version === 1 || version === 2) return { kind: 'older' };
-  try {
-    return version === 3 ? { kind: 'current', data: parseAppData(text) } : { kind: 'unreadable' };
-  } catch {
-    return { kind: 'unreadable' };
-  }
+  if (older) return { kind: 'older', data };
+  return data ? { kind: 'current', data } : { kind: 'unreadable' };
 }
 
 export function hasLegacyData(storage: Storage): boolean {

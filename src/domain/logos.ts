@@ -20,8 +20,8 @@ export interface LogoBook {
 export const LOGO_ID = /^logo-[1-9]\d{0,8}$/;
 
 export const TOO_MANY_LOGOS =
-  `Invoo pojme nejvýš ${LIMITS.logos} různých log a uložené faktury už všechna používají. Smaž starší faktury ` +
-  's jinými logy, nebo vyber znovu soubor loga, které už některá faktura má.';
+  `Invoo pojme nejvýš ${LIMITS.logos} různých log a uložené faktury už všechna používají. Vyber znovu soubor ` +
+  'loga, které už některá faktura má, nebo logo odeber.';
 const INVALID_LOGO = 'Logo musí být obrázek PNG, JPEG nebo WebP do 50 000 znaků.';
 
 /** The logos with this one added, or the same one found; throws a Czech message for an invalid one or one too many. */

@@ -42,6 +42,9 @@ describe('storeLogo', () => {
     for (let n = 1; n <= 20; n++) logos = storeLogo(logos, otherLogo(n)).logos;
     expect(new Set(logos.map((l) => l.dataUrl)).size).toBe(20);
     expect(() => storeLogo(logos, otherLogo(21))).toThrow(TOO_MANY_LOGOS);
+    // Issued invoices are kept: the way out is a logo already stored, or none.
+    expect(TOO_MANY_LOGOS).not.toMatch(/smaž|smaz|odstraň|vymaž/i);
+    expect(TOO_MANY_LOGOS).toContain('logo odeber');
     expect(storeLogo(logos, otherLogo(3)).logos).toHaveLength(20);
     expect(() => storeLogo([], 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=')).toThrow('PNG, JPEG nebo WebP');
   });
