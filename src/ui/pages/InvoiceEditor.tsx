@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { isValidDic } from '../../czech/dic';
 import { isValidIco } from '../../czech/ico';
 import { addDays, diffDays, formatCzechDate } from '../../domain/dates';
+import { defaultAppearance } from '../../domain/invoiceAppearance';
 import {
   VAT_RATES,
   type CatalogItem,
@@ -15,6 +16,7 @@ import { computeTotals, itemTotalCents } from '../../domain/invoiceTotals';
 import { findInvoiceProblem, isCompleteSupplier, type InvoiceProblem } from '../../domain/invoiceValidation';
 import { parseItemPrice, parseItemQuantity } from '../../domain/itemInput';
 import { LIMITS } from '../../domain/limits';
+import { logoUrl } from '../../domain/logos';
 import { centsToInput, formatCzk, formatQuantity } from '../../domain/money';
 import { createBlankInvoice, newItem, refreshDraft } from '../../domain/newInvoice';
 import { byDescription, byName, saveProblem } from '../../domain/records';
@@ -27,6 +29,7 @@ import { Field } from '../components/Field';
 import { IconDownload, IconPlus, IconTrash } from '../components/Icons';
 import { InvoicePaper } from '../components/InvoicePaper';
 import { NotFound } from '../components/NotFound';
+import { TemplatePicker } from '../components/TemplatePicker';
 import { useToast } from '../components/Toast';
 import { Toggle } from '../components/Toggle';
 import { printInvoice } from '../printInvoice';
@@ -216,7 +219,13 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   const profile = savedProfile(data);
   const supplier = isNew ? snapshotOf(profile) : completeSupplierSnapshot(draft.supplier, profile);
   const supplierFilledIn = !isNew && supplier !== draft.supplier;
-  const invoice: Invoice = supplier === draft.supplier ? draft : { ...draft, supplier };
+  // Likewise the look: a new invoice takes accent, logo and footer from the profile and only its template from the
+  // editor; an issued one keeps its own look, of which only the template can be changed here.
+  const appearance = isNew
+    ? { ...(profile?.appearance ?? defaultAppearance()), template: draft.appearance.template }
+    : draft.appearance;
+  const invoice: Invoice =
+    supplier === draft.supplier && appearance === draft.appearance ? draft : { ...draft, supplier, appearance };
   const supplierComplete = isCompleteSupplier(invoice.supplier);
   const customers = [...data.customers].sort(byName);
   const catalog = [...data.items].sort(byDescription);
@@ -605,6 +614,23 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
             </Field>
           </section>
 
+          <section className="card">
+            <h2 className="card__title">Vzhled faktury</h2>
+            <TemplatePicker
+              name="f-template"
+              legend="Šablona"
+              value={invoice.appearance.template}
+              onChange={(template) =>
+                setDraft((current) => ({ ...current, appearance: { ...current.appearance, template } }))
+              }
+              hint={
+                isNew
+                  ? 'Barvu, logo a patičku vezme faktura z nastavení. Uložená faktura si vzhled pamatuje.'
+                  : 'Barvu, logo a patičku si faktura pamatuje z doby uložení.'
+              }
+            />
+          </section>
+
           <div className="editor__save">
             <button type="button" className="btn btn--primary btn--lg" onClick={save}>
               Uložit fakturu
@@ -625,7 +651,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
             <Eyes size={20} mood="read" variant="outline" />
             <span>Živý náhled</span>
           </div>
-          <InvoicePaper invoice={invoice} />
+          <InvoicePaper invoice={invoice} logo={logoUrl(data.logos, invoice.appearance.logoId)} />
         </aside>
       </div>
 

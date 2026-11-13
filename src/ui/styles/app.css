@@ -1580,7 +1580,9 @@ select.input {
   width: 100%;
   padding: 0.9em 1.4em;
   border-radius: 1em;
-  background: var(--accent);
+  /* A chosen accent (see paperAppearance.ts) with black or white text, whichever reads better on it. */
+  background: var(--paper-accent, var(--accent));
+  color: var(--paper-on-accent, var(--ink));
   font-weight: 800;
 }
 
@@ -1680,6 +1682,262 @@ select.input {
 
 .paper .paper__stamp .eyes {
   --eye: 1.3em !important;
+}
+
+/* The supplier's logo next to the title; never taller than the title block, so the header keeps its height. */
+.paper__heading {
+  display: flex;
+  align-items: center;
+  gap: 1.4em;
+  min-width: 0;
+}
+
+.paper__logo {
+  display: block;
+  flex-shrink: 1;
+  width: auto;
+  height: auto;
+  max-width: 18em;
+  max-height: 4em;
+  object-fit: contain;
+}
+
+/* ---------- Šablony faktury ----------
+   Invoo is the base above. The other templates only recolour and tighten it: every spacing stays at most the Invoo
+   one, so whatever fits one A4 page in Invoo fits in each of them. The printed data is the same in all three. */
+
+/* Klasik: sober black and white, lines instead of fills; it ignores the accent. */
+.paper[data-template='klasik'] {
+  color: #000;
+}
+
+.paper[data-template='klasik'] .paper__title,
+.paper[data-template='minimal'] .paper__title {
+  font-family: var(--font-body);
+  font-size: 2.6em;
+}
+
+.paper[data-template='klasik'] .paper__title {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.paper[data-template='klasik'] .paper__kind,
+.paper[data-template='klasik'] .paper__number span,
+.paper[data-template='klasik'] .paper__meta span,
+.paper[data-template='klasik'] .paper__parties h3,
+.paper[data-template='klasik'] .paper__items th,
+.paper[data-template='klasik'] .paper__vat th,
+.paper[data-template='klasik'] .paper__iban,
+.paper[data-template='klasik'] .paper__note,
+.paper[data-template='klasik'] .paper__foot {
+  color: #000;
+}
+
+.paper[data-template='klasik'] .paper__meta {
+  padding: 0.7em 0;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  border-radius: 0;
+  background: none;
+}
+
+.paper[data-template='klasik'] .paper__items th {
+  border-bottom: 1px solid #000;
+}
+
+.paper[data-template='klasik'] .paper__items td {
+  border-top-color: #9a9a9a;
+}
+
+.paper[data-template='klasik'] .paper__sum {
+  padding: 0.5em 0;
+  border-top: 2px solid #000;
+  border-bottom: 2px solid #000;
+  border-radius: 0;
+  background: none;
+  color: #000;
+}
+
+.paper[data-template='klasik'] .paper__sum strong {
+  font-family: var(--font-body);
+  font-weight: 800;
+}
+
+.paper[data-template='klasik'] .paper__vat tfoot th,
+.paper[data-template='klasik'] .paper__vat tfoot td,
+.paper[data-template='klasik'] .paper__foot {
+  border-top-color: #000;
+}
+
+.paper[data-template='klasik'] .qr {
+  border-color: #000;
+  border-radius: 0;
+}
+
+.paper[data-template='klasik'] .qr svg {
+  fill: #000;
+}
+
+.paper[data-template='klasik'] .paper__logo {
+  filter: grayscale(1);
+}
+
+/* Paid stays visible in every template; outside Invoo the stamp is neutral and has no eyes. */
+.paper[data-template='klasik'] .paper__stamp,
+.paper[data-template='minimal'] .paper__stamp {
+  border-color: currentcolor;
+  color: #000;
+}
+
+.paper[data-template='klasik'] .paper__stamp {
+  border-radius: 0.2em;
+  transform: none;
+}
+
+/* Minimal: white space and hairlines; the accent, if any, is the rule above the total. */
+.paper[data-template='minimal'] .paper__title {
+  font-weight: 700;
+}
+
+.paper[data-template='minimal'] .paper__meta {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.paper[data-template='minimal'] .paper__items td,
+.paper[data-template='minimal'] .paper__vat tfoot th,
+.paper[data-template='minimal'] .paper__vat tfoot td,
+.paper[data-template='minimal'] .paper__foot {
+  border-top-color: var(--paper-2);
+}
+
+.paper[data-template='minimal'] .paper__sum {
+  padding: 0.6em 0 0;
+  border-top: 0.25em solid var(--paper-accent, var(--ink));
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+}
+
+.paper[data-template='minimal'] .qr {
+  border-color: var(--paper-2);
+}
+
+/* ---------- Nastavení: vzhled faktury ---------- */
+
+.templates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.templates__options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.templates__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: var(--r-m);
+  cursor: pointer;
+}
+
+.templates__option:has(input:checked) {
+  border-color: var(--ink);
+}
+
+.templates__option input {
+  margin-top: 3px;
+  accent-color: var(--ink);
+}
+
+.templates__option input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.templates__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.templates__text small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.appearance__accent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.appearance__accent .field {
+  flex: 1 1 260px;
+}
+
+.appearance__accent .btn {
+  margin-top: 26px;
+}
+
+.input--color {
+  width: 88px;
+  height: 48px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.appearance__logo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.appearance__logo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.appearance__logo-thumb {
+  max-width: 160px;
+  max-height: 56px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: #fff;
+  object-fit: contain;
+}
+
+.appearance__logo-none {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.appearance__preview {
+  max-width: 520px;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .templates__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---------- Invoo: hlášení, statistiky, uložené záznamy ---------- */
@@ -2339,5 +2597,12 @@ select.input {
 
   .paper__items thead {
     display: table-header-group;
+  }
+
+  /* Klasik prints black on white only, whatever the accent or the printer's colour setting. */
+  .paper[data-template='klasik'],
+  .paper[data-template='klasik'] * {
+    color: #000 !important;
+    border-color: #000 !important;
   }
 }

@@ -1,5 +1,6 @@
 import { getStatus } from '../../domain/invoiceStatus';
 import { computeTotals } from '../../domain/invoiceTotals';
+import { logoUrl } from '../../domain/logos';
 import { formatCzk } from '../../domain/money';
 import { todayIso } from '../clock';
 import { AdSlot } from '../components/AdSlot';
@@ -56,7 +57,7 @@ export function InvoiceDetail({ id }: { id: string }) {
 
       <div className="detail">
         <div className="detail__paper">
-          <InvoicePaper invoice={invoice} />
+          <InvoicePaper invoice={invoice} logo={logoUrl(data.logos, invoice.appearance.logoId)} />
         </div>
 
         <aside className="detail__side">

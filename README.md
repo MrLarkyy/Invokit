@@ -14,6 +14,12 @@ nemá server, nic, co vyplníš, neodchází z tvého zařízení, a nenačítá
   faktura řekne proč
 - číslování `RRRR-MM-NNN` navazuje na předchozí faktury, variabilní symbol se doplní z čísla
 - živý náhled, tisk a uložení do PDF přes tisk prohlížeče (běžná faktura se vejde na jednu stranu A4)
+- tři vzhledy tištěné faktury: **Invoo** (barevný pruh se součtem), **Klasik** (černobílý, s linkami) a **Minimal**
+  (hodně bílého místa); výchozí se vybírá v nastavení s náhledem, u každé faktury jde v editoru změnit
+- volitelná barva zvýraznění (barví jen plochy, text na nich zůstává čitelný; Klasik se tiskne černobíle), volitelné
+  logo dodavatele (PNG, JPEG nebo WebP do 5 MB, zmenší se samo, zůstane jen v prohlížeči a v záloze) a patička
+  „Vystaveno v Invoo“, kterou jde vypnout; každá uložená faktura si vzhled pamatuje, pozdější změna nastavení ji
+  nezmění
 - přehled faktur se stavem platby (zaplaceno, čeká, po splatnosti), statistiky za rok, 12 měsíců a podle odběratelů
 - uložení odběratelé a položky (nabízí je editor), duplikování a mazání faktur
 - rozepsaná nová faktura přežije zavření stránky
@@ -22,12 +28,17 @@ nemá server, nic, co vyplníš, neodchází z tvého zařízení, a nenačítá
 
 Faktury, odběratelé, položky a tvoje údaje se ukládají do `localStorage` tohoto prohlížeče (`invoo.data.v2`).
 Smazáním dat prohlížeče zmizí, proto je v nastavení **Stáhnout zálohu** (JSON soubor `invoo-zaloha-RRRR-MM-DD.json`) a
-**Obnovit ze souboru** (i v jiném prohlížeči nebo počítači). Obnova soubor nejdřív zkontroluje (velikost do 5 MB,
+**Obnovit ze souboru** (i v jiném prohlížeči nebo počítači). Obnova soubor nejdřív zkontroluje (velikost do 10 MB,
 počty, typy a rozsahy všech údajů); neplatný soubor odmítne s českou hláškou a stávající data nechá být.
 
+Záloha má verzi 3: každá faktura i nastavení nesou svůj vzhled (šablona, barva, logo, patička) a loga jsou v záloze
+jednou, i když je používá víc faktur (nejvýš 20 log). Loga se v záloze kontrolují stejně přísně jako ostatní údaje:
+jen PNG, JPEG nebo WebP, nejvýš 50 000 znaků, žádné SVG ani odkazy jinam. Zálohy a uložená data verze 2 (a 1) se
+načtou dál a dostanou vzhled Invoo bez barvy a loga, s patičkou.
+
 Přechod z Invokitu (dřívější název aplikace): data ze starého klíče `invokit.data.v1` i zálohy verze 1 se při prvním
-spuštění nebo při obnově automaticky převedou na verzi 2 se stejnými částkami; starý klíč zůstává v prohlížeči beze
-změny.
+spuštění nebo při obnově automaticky převedou na aktuální verzi se stejnými částkami; starý klíč zůstává v prohlížeči
+beze změny.
 
 ## Vývoj
 
