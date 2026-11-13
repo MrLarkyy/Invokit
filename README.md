@@ -46,5 +46,5 @@ vlastní doménu je potřeba nastavit i v Settings → Pages a v DNS.
 
 ## Licence písem
 
-Písma Fredoka a Nunito jsou přibalená z balíčků Fontsource a šíří se pod licencí SIL Open Font License 1.1; plné znění
+Písma Baloo 2 a Nunito jsou přibalená z balíčků Fontsource a šíří se pod licencí SIL Open Font License 1.1; plné znění
 je v `public/licenses/`.
