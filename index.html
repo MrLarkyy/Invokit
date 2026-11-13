@@ -2,41 +2,17 @@
 <html lang="cs">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Invokit – jednoduchý generátor faktur zdarma. Vše zůstává ve vašem prohlížeči." />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='2' width='22' height='28' rx='3' fill='%232456d6'/%3E%3Cpath d='M10 10h12M10 15h12M10 20h7' stroke='white' stroke-width='2'/%3E%3C/svg%3E"
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111413" />
+    <meta
+      name="description"
+      content="Invoo: faktury s QR platbou zdarma a bez registrace. Všechno běží v tvém prohlížeči."
     />
-    <title>Invokit</title>
+    <title>Invoo · Faktury pod dohledem</title>
   </head>
   <body>
-    <header class="toolbar">
-      <strong class="brand">Invokit</strong>
-      <nav class="tabs">
-        <button type="button" data-tab="invoice">Faktura</button>
-        <button type="button" data-tab="history">Historie</button>
-        <button type="button" data-tab="customers">Odběratelé</button>
-        <button type="button" data-tab="stats">Statistiky</button>
-      </nav>
-      <span id="status" class="hint" role="status"></span>
-      <span class="spacer"></span>
-      <span class="invoice-actions">
-        <button id="new" type="button">Nová faktura</button>
-        <button id="save" type="button">Uložit</button>
-        <button id="print" type="button" class="primary">Tisk / PDF</button>
-      </span>
-      <span class="backup" title="Data jsou jen v tomto prohlížeči. Zálohu si uložte do souboru.">
-        <button id="export" type="button">Záloha</button>
-        <button id="import" type="button">Obnovit</button>
-        <input id="import-file" type="file" accept="application/json,.json" hidden />
-      </span>
-    </header>
-    <main id="invoice-view" class="layout">
-      <aside id="editor"></aside>
-      <section id="preview" aria-label="Náhled faktury"></section>
-    </main>
-    <main id="other-view" class="other" hidden></main>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
