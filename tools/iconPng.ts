@@ -8,20 +8,20 @@ export interface Raster {
   rgba: Uint8Array;
 }
 
-type Rgb = readonly [number, number, number];
+export type Rgb = readonly [number, number, number];
 
-// Geometry of public/favicon.svg in its 64 x 64 viewBox.
-const VIEW = 64;
-const ACCENT: Rgb = [0xff, 0x5b, 0x1f];
-const WHITE: Rgb = [0xff, 0xff, 0xff];
-const INK: Rgb = [0x11, 0x14, 0x13];
-const CORNER_RADIUS = 16;
-const EYES = [
+// Geometry of public/favicon.svg in its 64 x 64 viewBox; tools/iconGeometry.test.ts compares it with the file.
+export const VIEW = 64;
+export const ACCENT: Rgb = [0xff, 0x5b, 0x1f];
+export const WHITE: Rgb = [0xff, 0xff, 0xff];
+export const INK: Rgb = [0x11, 0x14, 0x13];
+export const CORNER_RADIUS = 16;
+export const EYES = [
   { x: 21, y: 32, pupilX: 25, pupilY: 28 },
   { x: 43, y: 32, pupilX: 47, pupilY: 28 },
 ] as const;
-const EYE_RADIUS = 11;
-const PUPIL_RADIUS = 4.6;
+export const EYE_RADIUS = 11;
+export const PUPIL_RADIUS = 4.6;
 const SAMPLES = 4;
 
 function inCircle(x: number, y: number, cx: number, cy: number, r: number): boolean {
