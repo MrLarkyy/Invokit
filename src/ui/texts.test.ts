@@ -24,10 +24,18 @@ describe('messages about unsaved changes', () => {
     );
   });
 
-  it('leave a message alone when the change is stored and add the note when it is not', () => {
-    expect(withStoredNote('Faktura 2026-09-001 je smazaná.', true)).toBe('Faktura 2026-09-001 je smazaná.');
-    expect(withStoredNote('Faktura 2026-09-001 je smazaná.', false)).toBe(
+  it('leave a message alone when the change is stored and add the note when it is only kept', () => {
+    const message = 'Faktura 2026-09-001 je smazaná.';
+    expect(withStoredNote(message, { result: 'stored' })).toBe(message);
+    expect(withStoredNote(message, { result: 'kept' })).toBe(
       'Faktura 2026-09-001 je smazaná. Neuloženo: změna platí jen do zavření stránky.',
+    );
+  });
+
+  it('say why a rejected change was not made, never that it was', () => {
+    const reason = 'Faktura s číslem 2026-09-001 už existuje.';
+    expect(withStoredNote('Faktura 2026-09-001 je zaplacená. Dobrá práce.', { result: 'rejected', reason })).toBe(
+      reason,
     );
   });
 });

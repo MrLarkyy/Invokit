@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { isValidDic } from '../../czech/dic';
 import { isValidIco } from '../../czech/ico';
 import { addDays, diffDays, formatCzechDate } from '../../domain/dates';
+import { defaultAppearance } from '../../domain/invoiceAppearance';
 import {
   VAT_RATES,
   type CatalogItem,
@@ -15,6 +16,7 @@ import { computeTotals, itemTotalCents } from '../../domain/invoiceTotals';
 import { findInvoiceProblem, isCompleteSupplier, type InvoiceProblem } from '../../domain/invoiceValidation';
 import { parseItemPrice, parseItemQuantity } from '../../domain/itemInput';
 import { LIMITS } from '../../domain/limits';
+import { logoUrl } from '../../domain/logos';
 import { centsToInput, formatCzk, formatQuantity } from '../../domain/money';
 import { createBlankInvoice, newItem, refreshDraft } from '../../domain/newInvoice';
 import { byDescription, byName, saveProblem } from '../../domain/records';
@@ -27,6 +29,7 @@ import { Field } from '../components/Field';
 import { IconDownload, IconPlus, IconTrash } from '../components/Icons';
 import { InvoicePaper } from '../components/InvoicePaper';
 import { NotFound } from '../components/NotFound';
+import { TemplatePicker } from '../components/TemplatePicker';
 import { useToast } from '../components/Toast';
 import { Toggle } from '../components/Toggle';
 import { printInvoice } from '../printInvoice';
@@ -38,6 +41,8 @@ import { useDocumentTitle } from '../useDocumentTitle';
 const TERMS = [7, 14, 30];
 const CATALOG_LIST = 'catalog-items';
 const norm = (text: string) => text.trim().toLowerCase();
+const DELETED_ELSEWHERE =
+  'Tuhle fakturu mezitím smazala jiná záložka. Co máš ve formuláři, zůstává: když fakturu uložíš, vrátí se mezi uložené.';
 
 interface ItemRowProps {
   item: InvoiceItem;
@@ -183,6 +188,10 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   const toast = useToast();
   const isNew = editId === undefined;
   const existing = isNew ? undefined : data.invoices.find((invoice) => invoice.id === editId);
+  // Only an invoice that was missing when the editor opened is unknown. One that disappears later was deleted in
+  // another tab: the form and what was typed stay, and saving puts the invoice back.
+  const [missing] = useState(!isNew && !existing);
+  const deletedElsewhere = !isNew && !missing && !existing;
   const [initial] = useState<Invoice>(() => {
     if (existing) return structuredClone(existing);
     const stored = loadDraft();
@@ -196,7 +205,8 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     setProblem(null);
     setDraftState(next);
   };
-  useDocumentTitle(existing ? `Úprava faktury ${existing.number}` : 'Nová faktura');
+  const heading = isNew ? 'Nová faktura' : `Úprava faktury ${existing?.number ?? draft.number}`;
+  useDocumentTitle(missing ? 'Faktura nenalezena' : heading);
 
   // The unsaved new invoice survives a reload once the user changed something (this visit only while it cannot be
   // written to the browser).
@@ -209,14 +219,20 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     if (problem) document.getElementById(problem.targetId)?.focus();
   }, [problem]);
 
-  if (!isNew && !existing) return <NotFound />;
+  if (missing) return <NotFound />;
 
   // A new invoice takes the supplier profile as it is now. An issued one keeps its own snapshot (VAT status, bank
   // account, notes); only the details it lacks to name its supplier are filled in from the profile.
   const profile = savedProfile(data);
   const supplier = isNew ? snapshotOf(profile) : completeSupplierSnapshot(draft.supplier, profile);
   const supplierFilledIn = !isNew && supplier !== draft.supplier;
-  const invoice: Invoice = supplier === draft.supplier ? draft : { ...draft, supplier };
+  // Likewise the look: a new invoice takes accent, logo and footer from the profile and only its template from the
+  // editor; an issued one keeps its own look, of which only the template can be changed here.
+  const appearance = isNew
+    ? { ...(profile?.appearance ?? defaultAppearance()), template: draft.appearance.template }
+    : draft.appearance;
+  const invoice: Invoice =
+    supplier === draft.supplier && appearance === draft.appearance ? draft : { ...draft, supplier, appearance };
   const supplierComplete = isCompleteSupplier(invoice.supplier);
   const customers = [...data.customers].sort(byName);
   const catalog = [...data.items].sort(byDescription);
@@ -252,8 +268,9 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   };
 
   /**
-   * Validates and saves; returns null (after a Czech message) when the invoice cannot be saved. `stored` is false
-   * when the invoice is kept for this visit only (saving off, write refused, storage blocked).
+   * Validates and saves; returns null (after a Czech message) when the invoice cannot be saved, also when the store
+   * rejects it. `stored` is false when the invoice is kept for this visit only (saving off, write refused, storage
+   * blocked).
    */
   const commit = (): { invoice: Invoice; stored: boolean } | null => {
     const takenIds = new Set(data.invoices.map((i) => i.id));
@@ -261,22 +278,27 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     const toSave = { ...invoice, id };
     const invalidNumber = formRef.current?.querySelector<HTMLElement>('[data-invalid-number]');
     const found = findInvoiceProblem(toSave);
-    const stored = saveProblem(data, toSave);
-    const next: EditorProblem | null = invalidNumber
-      ? { message: 'Oprav zvýrazněné číslo u položky.', targetId: invalidNumber.id }
-      : found
-        ? { message: found.message, targetId: problemTarget(found, draft.items[0]?.id ?? '') }
-        : stored
-          ? { message: stored, targetId: stored.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum' }
-          : null;
-    if (next) {
+    const refuse = (next: EditorProblem) => {
       setMobileView('form');
       setProblem(next);
       return null;
-    }
-    const inBrowser = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString() });
+    };
+    // The data leaves no room for the invoice, mostly because another tab stored one with this number meanwhile.
+    // That tab's save also removed the draft all tabs share, so the new invoice is written back as the draft:
+    // reloaded before the next keystroke, this tab opens it again.
+    const unstorable = (message: string) => {
+      if (isNew) saveDraft(draft);
+      return refuse({ message, targetId: message.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum' });
+    };
+    const stored = saveProblem(data, toSave, isNew);
+    if (invalidNumber) return refuse({ message: 'Oprav zvýrazněné číslo u položky.', targetId: invalidNumber.id });
+    if (found) return refuse({ message: found.message, targetId: problemTarget(found, draft.items[0]?.id ?? '') });
+    if (stored) return unstorable(stored);
+    const done = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString(), create: isNew });
+    // Nothing was saved, so the form stays.
+    if (done.result === 'rejected') return unstorable(done.reason);
     if (isNew) saveDraft(null);
-    return { invoice: toSave, stored: inBrowser };
+    return { invoice: toSave, stored: done.result === 'stored' };
   };
 
   const save = () => {
@@ -301,23 +323,20 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   };
 
   const discard = () => {
-    if (isNew) {
-      saveDraft(null);
-      navigate({ name: 'faktury' });
-    } else {
-      navigate({ name: 'faktura', id: invoice.id });
-    }
+    if (isNew) saveDraft(null);
+    // An invoice deleted in another tab has no detail to go back to.
+    navigate(existing ? { name: 'faktura', id: invoice.id } : { name: 'faktury' });
   };
 
   return (
     <div className="page container">
       <header className="page__head">
         <div>
-          <h1>{existing ? `Úprava faktury ${existing.number}` : 'Nová faktura'}</h1>
+          <h1>{heading}</h1>
           <p className="page__lead">
             {supplierFilledIn
               ? 'Chybějící údaje dodavatele se doplní z nastavení. DPH, účet a poznámky zůstávají jako při vystavení.'
-              : existing
+              : !isNew
                 ? 'Dodavatel, DPH a účet zůstávají tak, jak byly při vystavení.'
                 : 'Vpravo vidíš fakturu tak, jak půjde do tisku. Mění se, jak píšeš.'}
           </p>
@@ -352,6 +371,11 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
           <div className="form-problem" role="alert">
             {problem ? problem.message : null}
           </div>
+          {deletedElsewhere ? (
+            <div className="notice" role="alert">
+              {DELETED_ELSEWHERE}
+            </div>
+          ) : null}
           {!supplierComplete ? (
             <div
               id="supplier-notice"
@@ -605,6 +629,23 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
             </Field>
           </section>
 
+          <section className="card">
+            <h2 className="card__title">Vzhled faktury</h2>
+            <TemplatePicker
+              name="f-template"
+              legend="Šablona"
+              value={invoice.appearance.template}
+              onChange={(template) =>
+                setDraft((current) => ({ ...current, appearance: { ...current.appearance, template } }))
+              }
+              hint={
+                isNew
+                  ? 'Barvu, logo a patičku vezme faktura z nastavení. Uložená faktura si vzhled pamatuje.'
+                  : 'Barvu, logo a patičku si faktura pamatuje z doby uložení.'
+              }
+            />
+          </section>
+
           <div className="editor__save">
             <button type="button" className="btn btn--primary btn--lg" onClick={save}>
               Uložit fakturu
@@ -625,7 +666,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
             <Eyes size={20} mood="read" variant="outline" />
             <span>Živý náhled</span>
           </div>
-          <InvoicePaper invoice={invoice} />
+          <InvoicePaper invoice={invoice} logo={logoUrl(data.logos, invoice.appearance.logoId)} />
         </aside>
       </div>
 

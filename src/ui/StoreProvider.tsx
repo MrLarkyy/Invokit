@@ -1,40 +1,62 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Invoice } from '../domain/invoice';
 import type { AppData } from '../storage/appData';
-import { parseAppData } from '../storage/appDataSchema';
 import {
   DATA_KEY,
   hasLegacyData,
   loadAppData,
+  PREVIOUS_DATA_KEY,
+  readPreviousText,
   removeLegacyData,
-  saveAppData,
+  removePreviousData,
   type LoadedAppData,
 } from '../storage/appDataStorage';
-import { appStoreReducer, openAppStore, settleAppStore, writeAppStore, type AppStoreAction } from '../storage/appStore';
+import {
+  changeAppStore,
+  openAppStore,
+  outcomeOf,
+  rewriteAppStore,
+  syncAppStore,
+  type AppStore,
+  type AppStoreAction,
+  type AppStoreOutcome,
+} from '../storage/appStore';
+import { downloadText } from '../storage/backupFile';
 import { DraftSession } from '../storage/draftSession';
 import { browserStorage } from './browserStorage';
+import { todayIso } from './clock';
 import { useToast } from './components/Toast';
+import { olderTabFileName } from './olderTabNotice';
 
 interface Store {
   data: AppData;
   /**
-   * Applies the action and stores the result right away. True when the data is then stored in the browser; false
-   * while saving is off, when the write was refused (a warning is shown) and when the browser blocks storage, so
-   * the caller never reports an unsaved change as saved.
+   * Applies the action and stores the result right away. `stored`: the data is in the browser. `kept`: applied for
+   * this visit only (saving off, the write refused with a warning shown, storage blocked). `rejected`: not applied,
+   * with the reason, as the data another tab stored meanwhile leaves no room for it. So the caller never reports
+   * an unsaved change as saved, nor a rejected one as made.
    */
-  dispatch: (action: AppStoreAction) => boolean;
+  dispatch: (action: AppStoreAction) => AppStoreOutcome;
   /** The unsaved new invoice; null when there is none. */
   loadDraft: () => Invoice | null;
   /** Keeps the unsaved new invoice (null clears it): in the browser, or for this visit only while it cannot be written. */
   saveDraft: (draft: Invoice | null) => void;
   /** False when the browser blocks localStorage (nothing survives the visit). */
   persistent: boolean;
-  /** False while unreadable data has no safe copy: nothing is written until the user resumes saving. */
+  /** False while unreadable data has no safe copy (until the user resumes saving) and once the data is newer. */
   canWrite: boolean;
   /** A restore or another tab's data replaced the data this visit started with. */
   dataReplaced: boolean;
   /** The browser refused the last write. */
   lastWriteFailed: boolean;
+  /** An older Invoo saved in another tab: its data was taken over, or lies aside under the previous key. */
+  olderTab: AppStore['olderTab'];
+  /** The browser storage holds data of a newer Invoo: this tab writes nothing until it is reloaded. */
+  newer: boolean;
+  /** Offers the text an older Invoo saved aside as a file; returns that text, null when there is none any more. */
+  downloadOlder: () => string | null;
+  /** Removes that text while it is still the downloaded one; false when the older Invoo has saved again since. */
+  dropOlder: (downloaded: string) => boolean;
   /** How loading went (unreadable data, Invokit data that does not fit). */
   loaded: LoadedAppData;
   /** The Invokit data is the only copy because the new data does not fit into the browser storage. */
@@ -56,54 +78,75 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState(() => openAppStore(loaded));
   const current = useRef(store);
   const [drafts] = useState(() => new DraftSession(storage));
-  const { canWrite, dataReplaced, lastWriteFailed } = store;
+  const { canWrite, dataReplaced, lastWriteFailed, olderTab, newer } = store;
   const loadDraft = useCallback(() => drafts.load(), [drafts]);
   // A new function once saving resumes, so the open editor writes its draft again.
   const saveDraft = useCallback((draft: Invoice | null) => drafts.save(draft, canWrite), [drafts, canWrite]);
 
+  const adopt = useCallback((next: AppStore) => {
+    if (next === current.current) return;
+    current.current = next;
+    setStore(next);
+  }, []);
+
   const dispatch = useCallback(
-    (action: AppStoreAction): boolean => {
-      const before = current.current;
-      const next = appStoreReducer(before, action);
-      const written = writeAppStore(storage, before, next);
-      if (written === 'unchanged') return persistent && before.canWrite;
-      const settled = settleAppStore(next, written);
-      current.current = settled;
-      setStore(settled);
-      if (written === 'failed') {
+    (action: AppStoreAction): AppStoreOutcome => {
+      const change = changeAppStore(storage, current.current, action);
+      adopt(change.store);
+      if (change.written === 'failed') {
         toast(SAVE_FAILED);
         if (hasLegacyData(storage)) setLegacyBlocking(true);
       }
-      return persistent && written === 'saved';
+      return outcomeOf(change, persistent);
     },
-    [persistent, storage, toast],
+    [adopt, persistent, storage, toast],
   );
 
-  // Another tab wrote new data: take it over without writing it back.
+  // What other tabs store is followed without writing anything (see syncAppStore). A write made between loading and
+  // listening raised no event, and a page restored from the back/forward cache was sent none while it was away.
   useEffect(() => {
     if (!persistent) return;
+    const sync = () => adopt(syncAppStore(storage, current.current));
     const onStorage = (event: StorageEvent) => {
-      if (event.storageArea !== storage || event.key !== DATA_KEY || event.newValue === null) return;
-      try {
-        const next = appStoreReducer(current.current, { type: 'data/reload', data: parseAppData(event.newValue) });
-        current.current = next;
-        setStore(next);
-      } catch {
-        // Unreadable data from another tab is ignored; this tab keeps what it has.
-      }
+      if (event.storageArea !== storage) return;
+      if (event.key === DATA_KEY || event.key === PREVIOUS_DATA_KEY) sync();
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) sync();
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [persistent, storage]);
+    window.addEventListener('pageshow', onPageShow);
+    sync();
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [adopt, persistent, storage]);
 
   const removeLegacy = useCallback(() => {
-    if (!removeLegacyData(storage) || !saveAppData(storage, current.current.data)) return false;
-    const settled = settleAppStore(current.current, 'saved');
-    current.current = settled;
-    setStore(settled);
+    if (!current.current.canWrite || !removeLegacyData(storage)) return false;
+    const { store: next, written } = rewriteAppStore(storage, current.current);
+    adopt(next);
+    if (written !== 'saved') return false;
     setLegacyBlocking(false);
     return true;
-  }, [storage]);
+  }, [adopt, storage]);
+
+  const downloadOlder = useCallback(() => {
+    const text = readPreviousText(storage);
+    if (text === null) adopt(syncAppStore(storage, current.current));
+    else downloadText(text, olderTabFileName(todayIso()));
+    return text;
+  }, [adopt, storage]);
+
+  const dropOlder = useCallback(
+    (downloaded: string) => {
+      const removed = removePreviousData(storage, downloaded);
+      adopt(syncAppStore(storage, current.current));
+      return removed;
+    },
+    [adopt, storage],
+  );
 
   return (
     <StoreContext.Provider
@@ -116,6 +159,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         canWrite,
         dataReplaced,
         lastWriteFailed,
+        olderTab,
+        newer,
+        downloadOlder,
+        dropOlder,
         loaded,
         legacyBlocking,
         removeLegacy,

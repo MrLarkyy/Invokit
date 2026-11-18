@@ -1,6 +1,7 @@
 import { splitZipCity } from '../czech/czechAddress';
 import { parseCzechAccount } from '../czech/czechIban';
 import { isIsoDate } from '../domain/dates';
+import { defaultAppearance } from '../domain/invoiceAppearance';
 import type { CatalogItem, Invoice, InvoiceItem, Party } from '../domain/invoice';
 import { uniqueInvoiceId } from '../domain/invoiceNumber';
 import { LIMITS } from '../domain/limits';
@@ -71,6 +72,7 @@ function migrateInvoice(invoice: InvoiceV1, id: string, paid: boolean, savedAt: 
       registryNote: clip(invoice.registryNote, LIMITS.registryNote),
       bankAccount: clip(invoice.bankAccount),
     },
+    appearance: defaultAppearance(),
     customer: migrateParty(invoice.customer),
     items: invoice.items.map(migrateItem),
     note: '',
@@ -92,6 +94,7 @@ function migrateProfile(profile: SupplierProfileV1): SupplierProfile {
     accountPrefix: account?.prefix ?? '',
     accountNumber: account?.number ?? '',
     bankCode: account?.bankCode ?? '',
+    appearance: defaultAppearance(),
   };
 }
 
@@ -107,8 +110,8 @@ function migrateCatalog(items: InvoiceItemV1[]): CatalogItem[] {
 }
 
 /**
- * v1 → v2. Items get VAT rate 0 and keep the v1 float line total where exact arithmetic differs, so every issued
- * total stays the same; v1 paid invoices get no invented payment date.
+ * v1 → v3. Items get VAT rate 0 and keep the v1 float line total where exact arithmetic differs, so every issued
+ * total stays the same; v1 paid invoices get no invented payment date; everything prints in the default look.
  */
 export function migrateV1(v1: AppDataV1): AppData {
   const taken = new Set<string>();
@@ -123,17 +126,18 @@ export function migrateV1(v1: AppDataV1): AppData {
   );
   const supplier = v1.supplier ? migrateProfile(v1.supplier) : newest ? profileFromSnapshot(newest.supplier) : null;
   return {
-    version: 2,
+    version: 3,
     supplier,
     invoices,
     // v1 kept these lists without a limit; the first ones (v1 sorted them by name) stay within the v2 limits.
     customers: v1.customers.slice(0, LIMITS.customers).map(migrateParty),
     items: migrateCatalog(v1.items).slice(0, LIMITS.catalog),
+    logos: [],
     lastBackupAt: null,
   };
 }
 
-/** The unsaved v1 draft as a v2 invoice, with an id no saved invoice holds. */
+/** The unsaved v1 draft as a current invoice, with an id no saved invoice holds. */
 export function migrateDraftV1(draft: InvoiceV1, takenIds: ReadonlySet<string>): Invoice {
   return migrateInvoice(draft, uniqueInvoiceId(draft.number, takenIds), false, '');
 }

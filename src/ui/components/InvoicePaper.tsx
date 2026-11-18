@@ -5,6 +5,7 @@ import type { Invoice } from '../../domain/invoice';
 import { paymentResult } from '../../domain/invoicePayment';
 import { computeTotals, filledItems, itemTotalCents } from '../../domain/invoiceTotals';
 import { formatCzk, formatQuantity } from '../../domain/money';
+import { paperAppearance } from '../paperAppearance';
 import { Eyes } from './Eyes';
 import { QrCode } from './QrCode';
 
@@ -13,12 +14,22 @@ function Placeholder({ text }: { text: string }) {
   return <span className="screen-only">{text}</span>;
 }
 
+interface InvoicePaperProps {
+  invoice: Invoice;
+  /** The data URL of the logo the invoice names (see logoUrl), null for none. */
+  logo: string | null;
+}
+
 /**
- * The A4 invoice: live preview in the editor, the detail page and print (see @media print in app.css).
- * It reads only the invoice and its own supplier snapshot, never the current profile.
+ * The A4 invoice: live preview in the editor, Settings, the detail page and print (see @media print in app.css).
+ * It reads only the invoice with its own supplier snapshot and look, never the current profile. Every template
+ * prints the same data; only the CSS of `data-template` differs.
  */
-export function InvoicePaper({ invoice }: { invoice: Invoice }) {
+export function InvoicePaper({ invoice, logo }: InvoicePaperProps) {
   const { supplier, customer } = invoice;
+  const look = paperAppearance(invoice.appearance);
+  // The Invoo eyes belong to the Invoo template only.
+  const eyes = look.template === 'invoo';
   const payer = supplier.vatPayer;
   const totals = computeTotals(invoice.items, payer);
   const payment = paymentResult(invoice);
@@ -29,11 +40,19 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
 
   return (
     <div className="paper-wrap">
-      <article className="paper" aria-label={`Faktura ${invoice.number}`}>
+      <article
+        className="paper"
+        data-template={look.template}
+        style={look.style}
+        aria-label={`Faktura ${invoice.number}`}
+      >
         <header className="paper__head">
-          <div>
-            <h2 className="paper__title">Faktura</h2>
-            <p className="paper__kind">{payer ? 'Daňový doklad' : 'Neplátce DPH'}</p>
+          <div className="paper__heading">
+            {logo ? <img className="paper__logo" src={logo} alt="" /> : null}
+            <div>
+              <h2 className="paper__title">Faktura</h2>
+              <p className="paper__kind">{payer ? 'Daňový doklad' : 'Neplátce DPH'}</p>
+            </div>
           </div>
           <div className="paper__number">
             <span>Číslo dokladu</span>
@@ -121,78 +140,83 @@ export function InvoicePaper({ invoice }: { invoice: Invoice }) {
           </tbody>
         </table>
 
-        <section className="paper__totals">
-          {payer ? (
-            <table className="paper__vat">
-              <thead>
-                <tr>
-                  <th>Sazba DPH</th>
-                  <th className="num">Základ</th>
-                  <th className="num">DPH</th>
-                </tr>
-              </thead>
-              <tbody>
-                {totals.rates.map((rate) => (
-                  <tr key={rate.rate}>
-                    <td>{rate.rate} %</td>
-                    <td className="num">{formatCzk(rate.baseCents)}</td>
-                    <td className="num">{formatCzk(rate.vatCents)}</td>
+        {/* Totals, payment and footer stay together when a long invoice continues on another page. */}
+        <div className="paper__end">
+          <section className="paper__totals">
+            {payer ? (
+              <table className="paper__vat">
+                <thead>
+                  <tr>
+                    <th>Sazba DPH</th>
+                    <th className="num">Základ</th>
+                    <th className="num">DPH</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th>Celkem</th>
-                  <td className="num">{formatCzk(totals.baseCents)}</td>
-                  <td className="num">{formatCzk(totals.vatCents)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          ) : null}
-          <div className="paper__sum">
-            <span>Celkem k úhradě</span>
-            <strong>{formatCzk(totals.totalCents)}</strong>
-          </div>
-        </section>
-
-        <section className="paper__pay">
-          {payment.request ? (
-            <div className="paper__qr">
-              <QrCode text={buildSpayd(payment.request)} />
-              <div>
-                <strong>QR platba</strong>
-                <span>Naskenuj v aplikaci své banky.</span>
-                <span className="paper__iban">IBAN {formatIban(payment.request.iban)}</span>
-                {invoice.paymentMethod ? <span>Způsob úhrady: {invoice.paymentMethod}</span> : null}
-              </div>
+                </thead>
+                <tbody>
+                  {totals.rates.map((rate) => (
+                    <tr key={rate.rate}>
+                      <td>{rate.rate} %</td>
+                      <td className="num">{formatCzk(rate.baseCents)}</td>
+                      <td className="num">{formatCzk(rate.vatCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th>Celkem</th>
+                    <td className="num">{formatCzk(totals.baseCents)}</td>
+                    <td className="num">{formatCzk(totals.vatCents)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            ) : null}
+            <div className="paper__sum">
+              <span>Celkem k úhradě</span>
+              <strong>{formatCzk(totals.totalCents)}</strong>
             </div>
-          ) : (
-            <div className="paper__qr paper__qr--off">
-              <div>
-                <strong>{invoice.paymentMethod || 'Platba převodem'}</strong>
-                <span>
-                  Účet {supplier.bankAccount || <Placeholder text="…" />}, variabilní symbol{' '}
-                  {invoice.variableSymbol || <Placeholder text="…" />}
-                </span>
-                {iban ? <span className="paper__iban">IBAN {formatIban(iban)}</span> : null}
-                {payment.problem ? <span className="paper__qr-why">{payment.problem}</span> : null}
-              </div>
-            </div>
-          )}
-          {invoice.note ? <p className="paper__note">{invoice.note}</p> : null}
-        </section>
+          </section>
 
-        <footer className="paper__foot">
-          <span>{supplier.registryNote}</span>
-          <span className="paper__brand">
-            <Eyes size={9} variant="outline" mood="watch" />
-            Vystaveno v Invoo · invoo.cz
-          </span>
-        </footer>
+          <section className="paper__pay">
+            {payment.request ? (
+              <div className="paper__qr">
+                <QrCode text={buildSpayd(payment.request)} />
+                <div>
+                  <strong>QR platba</strong>
+                  <span>Naskenuj v aplikaci své banky.</span>
+                  <span className="paper__iban">IBAN {formatIban(payment.request.iban)}</span>
+                  {invoice.paymentMethod ? <span>Způsob úhrady: {invoice.paymentMethod}</span> : null}
+                </div>
+              </div>
+            ) : (
+              <div className="paper__qr paper__qr--off">
+                <div>
+                  <strong>{invoice.paymentMethod || 'Platba převodem'}</strong>
+                  <span>
+                    Účet {supplier.bankAccount || <Placeholder text="…" />}, variabilní symbol{' '}
+                    {invoice.variableSymbol || <Placeholder text="…" />}
+                  </span>
+                  {iban ? <span className="paper__iban">IBAN {formatIban(iban)}</span> : null}
+                  {payment.problem ? <span className="paper__qr-why">{payment.problem}</span> : null}
+                </div>
+              </div>
+            )}
+            {invoice.note ? <p className="paper__note">{invoice.note}</p> : null}
+          </section>
+
+          <footer className="paper__foot">
+            <span>{supplier.registryNote}</span>
+            {invoice.appearance.brandFooter ? (
+              <span className="paper__brand">
+                {eyes ? <Eyes size={9} variant="outline" mood="watch" /> : null}
+                Vystaveno v Invoo · invoo.cz
+              </span>
+            ) : null}
+          </footer>
+        </div>
 
         {invoice.paid ? (
           <div className="paper__stamp">
-            <Eyes size={14} mood="happy" variant="outline" />
+            {eyes ? <Eyes size={14} mood="happy" variant="outline" /> : null}
             {invoice.paidAt ? `Zaplaceno ${formatCzechDate(invoice.paidAt)}` : 'Zaplaceno'}
           </div>
         ) : null}

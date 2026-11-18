@@ -19,13 +19,21 @@ export function sameParty(a: Party, b: Party): boolean {
   return norm(a.name) === norm(b.name);
 }
 
-/** The Czech reason this invoice cannot be stored next to the others (number taken, invoice limit), else null. */
-export function saveProblem(data: InvoiceRecords, invoice: Invoice): string | null {
+/** Said when a new invoice got the id of one saved meanwhile under another number; saving again gives it a free id. */
+export const ID_TAKEN = 'Mezitím přibyla jiná faktura se stejným označením. Ulož fakturu znovu.';
+
+/**
+ * The Czech reason this invoice cannot be stored next to the others (number taken, invoice limit), else null.
+ * `create`: the invoice is a new one, so an invoice already holding its id is another invoice, never an older
+ * version of this one (two tabs offer the same next number, and with it the same id).
+ */
+export function saveProblem(data: InvoiceRecords, invoice: Invoice, create = false): string | null {
   const number = invoice.number.trim();
-  if (data.invoices.some((i) => i.id !== invoice.id && i.number.trim() === number)) {
+  if (data.invoices.some((i) => (create || i.id !== invoice.id) && i.number.trim() === number)) {
     return `Faktura s číslem ${number} už existuje.`;
   }
   const isNew = !data.invoices.some((i) => i.id === invoice.id);
+  if (create && !isNew) return ID_TAKEN;
   if (isNew && data.invoices.length >= LIMITS.invoices) {
     return 'Invoo pojme nejvýš 10 000 faktur. Stáhni si zálohu a starší faktury smaž.';
   }
@@ -54,21 +62,24 @@ function upsertCatalog(catalog: CatalogItem[], items: InvoiceItem[]): CatalogIte
 }
 
 /**
- * Saves the invoice by id (newest number first), without empty rows, and remembers its customer and items.
- * The paid state stays as it was; throws the Czech saveProblem when the invoice cannot be stored.
+ * Saves the invoice by id (newest number first), without empty rows, and remembers its customer and items: with
+ * `create` as a new invoice, unpaid; otherwise in place of the one with its id, whose paid state stays as it was.
+ * An edit of an invoice that is no longer among the saved ones (another tab deleted it meanwhile) puts it back,
+ * paid as the edit holds it. Throws the Czech saveProblem when the invoice cannot be stored.
  */
-export function saveInvoice<T extends InvoiceRecords>(data: T, invoice: Invoice, now: string): T {
-  const problem = saveProblem(data, invoice);
+export function saveInvoice<T extends InvoiceRecords>(data: T, invoice: Invoice, now: string, create = false): T {
+  const problem = saveProblem(data, invoice, create);
   if (problem) throw new Error(problem);
   const previous = data.invoices.find((i) => i.id === invoice.id);
   const copy = structuredClone(invoice);
+  const payment = create ? { paid: false, paidAt: null } : (previous ?? copy);
   const saved: Invoice = {
     ...copy,
     number: copy.number.trim(),
     items: filledItems(copy.items),
     savedAt: now,
-    paid: previous?.paid ?? false,
-    paidAt: previous?.paidAt ?? null,
+    paid: payment.paid,
+    paidAt: payment.paidAt,
   };
   const invoices = [...data.invoices.filter((i) => i.id !== invoice.id), saved].sort((a, b) =>
     b.number.localeCompare(a.number),
