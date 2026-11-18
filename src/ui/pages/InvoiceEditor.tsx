@@ -41,6 +41,8 @@ import { useDocumentTitle } from '../useDocumentTitle';
 const TERMS = [7, 14, 30];
 const CATALOG_LIST = 'catalog-items';
 const norm = (text: string) => text.trim().toLowerCase();
+const DELETED_ELSEWHERE =
+  'Tuhle fakturu mezitím smazala jiná záložka. Co máš ve formuláři, zůstává: když fakturu uložíš, vrátí se mezi uložené.';
 
 interface ItemRowProps {
   item: InvoiceItem;
@@ -186,6 +188,10 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   const toast = useToast();
   const isNew = editId === undefined;
   const existing = isNew ? undefined : data.invoices.find((invoice) => invoice.id === editId);
+  // Only an invoice that was missing when the editor opened is unknown. One that disappears later was deleted in
+  // another tab: the form and what was typed stay, and saving puts the invoice back.
+  const [missing] = useState(!isNew && !existing);
+  const deletedElsewhere = !isNew && !missing && !existing;
   const [initial] = useState<Invoice>(() => {
     if (existing) return structuredClone(existing);
     const stored = loadDraft();
@@ -199,7 +205,8 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     setProblem(null);
     setDraftState(next);
   };
-  useDocumentTitle(existing ? `Úprava faktury ${existing.number}` : 'Nová faktura');
+  const heading = isNew ? 'Nová faktura' : `Úprava faktury ${existing?.number ?? draft.number}`;
+  useDocumentTitle(missing ? 'Faktura nenalezena' : heading);
 
   // The unsaved new invoice survives a reload once the user changed something (this visit only while it cannot be
   // written to the browser).
@@ -212,7 +219,7 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
     if (problem) document.getElementById(problem.targetId)?.focus();
   }, [problem]);
 
-  if (!isNew && !existing) return <NotFound />;
+  if (missing) return <NotFound />;
 
   // A new invoice takes the supplier profile as it is now. An issued one keeps its own snapshot (VAT status, bank
   // account, notes); only the details it lacks to name its supplier are filled in from the profile.
@@ -276,17 +283,20 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
       setProblem(next);
       return null;
     };
-    const unstorable = (message: string): EditorProblem => ({
-      message,
-      targetId: message.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum',
-    });
+    // The data leaves no room for the invoice, mostly because another tab stored one with this number meanwhile.
+    // That tab's save also removed the draft all tabs share, so the new invoice is written back as the draft:
+    // reloaded before the next keystroke, this tab opens it again.
+    const unstorable = (message: string) => {
+      if (isNew) saveDraft(draft);
+      return refuse({ message, targetId: message.startsWith('Faktura s číslem') ? 'f-number' : 'items-sum' });
+    };
     const stored = saveProblem(data, toSave, isNew);
     if (invalidNumber) return refuse({ message: 'Oprav zvýrazněné číslo u položky.', targetId: invalidNumber.id });
     if (found) return refuse({ message: found.message, targetId: problemTarget(found, draft.items[0]?.id ?? '') });
-    if (stored) return refuse(unstorable(stored));
+    if (stored) return unstorable(stored);
     const done = dispatch({ type: 'invoice/save', invoice: toSave, now: new Date().toISOString(), create: isNew });
-    // Another tab stored an invoice with this number meanwhile: nothing was saved, so the draft and the form stay.
-    if (done.result === 'rejected') return refuse(unstorable(done.reason));
+    // Nothing was saved, so the form stays.
+    if (done.result === 'rejected') return unstorable(done.reason);
     if (isNew) saveDraft(null);
     return { invoice: toSave, stored: done.result === 'stored' };
   };
@@ -313,23 +323,20 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
   };
 
   const discard = () => {
-    if (isNew) {
-      saveDraft(null);
-      navigate({ name: 'faktury' });
-    } else {
-      navigate({ name: 'faktura', id: invoice.id });
-    }
+    if (isNew) saveDraft(null);
+    // An invoice deleted in another tab has no detail to go back to.
+    navigate(existing ? { name: 'faktura', id: invoice.id } : { name: 'faktury' });
   };
 
   return (
     <div className="page container">
       <header className="page__head">
         <div>
-          <h1>{existing ? `Úprava faktury ${existing.number}` : 'Nová faktura'}</h1>
+          <h1>{heading}</h1>
           <p className="page__lead">
             {supplierFilledIn
               ? 'Chybějící údaje dodavatele se doplní z nastavení. DPH, účet a poznámky zůstávají jako při vystavení.'
-              : existing
+              : !isNew
                 ? 'Dodavatel, DPH a účet zůstávají tak, jak byly při vystavení.'
                 : 'Vpravo vidíš fakturu tak, jak půjde do tisku. Mění se, jak píšeš.'}
           </p>
@@ -364,6 +371,11 @@ export function InvoiceEditor({ editId }: { editId?: string }) {
           <div className="form-problem" role="alert">
             {problem ? problem.message : null}
           </div>
+          {deletedElsewhere ? (
+            <div className="notice" role="alert">
+              {DELETED_ELSEWHERE}
+            </div>
+          ) : null}
           {!supplierComplete ? (
             <div
               id="supplier-notice"

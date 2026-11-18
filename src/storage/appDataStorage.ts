@@ -11,10 +11,12 @@ import { migrateDraftV1 } from './migrateV1';
 export const DATA_KEY = 'invoo.data.v3';
 export const BROKEN_DATA_KEY = 'invoo.data.v3.broken';
 export const DRAFT_KEY = 'invoo.draft.v3';
-// Read until the first stored write under the data key, which removes the previous data and takes the draft along.
-// The previous data key is never written, except to put the very same text back when that first write does not
-// fit; text found there later was saved by an older Invoo and is only offered to the user (it counts against the
-// quota until it is removed). An older Invoo opened after the move finds its key empty and starts empty.
+// Read until the first stored write under the data key, which removes the previous data and takes the draft along
+// (copied, or moved when two copies do not fit). The previous data key is never written, except to put the very
+// same text back when that first write does not fit; text found there later was saved by an older Invoo and is only
+// offered to the user (it counts against the quota until it is removed). An older Invoo opened after the move finds
+// its keys empty: it starts empty, or migrates the Invokit data and draft again while the Invokit keys are still in
+// the browser, and saves either under the previous keys.
 export const PREVIOUS_DATA_KEY = 'invoo.data.v2';
 export const PREVIOUS_BROKEN_KEY = 'invoo.data.v2.broken';
 export const PREVIOUS_DRAFT_KEY = 'invoo.draft.v2';
@@ -88,10 +90,17 @@ function isNewer(text: string): boolean {
   return typeof version === 'number' && version > CURRENT_VERSION;
 }
 
-/** The draft of before the move stays readable after it: from then on the previous draft key is no longer read. */
+/**
+ * The draft of before the move stays readable after it, when the previous draft key is no longer read. It is copied,
+ * so an older Invoo still open finds its draft too; when the browser has no room for a second copy it is moved, and
+ * put back where it was if even that is refused.
+ */
 function carryPreviousDraft(storage: Storage): void {
   const previous = read(storage, PREVIOUS_DRAFT_KEY);
-  if (previous !== null && read(storage, DRAFT_KEY) === null) write(storage, DRAFT_KEY, previous);
+  if (previous === null || read(storage, DRAFT_KEY) !== null || write(storage, DRAFT_KEY, previous)) return;
+  if (remove(storage, PREVIOUS_DRAFT_KEY) && !write(storage, DRAFT_KEY, previous)) {
+    write(storage, PREVIOUS_DRAFT_KEY, previous);
+  }
 }
 
 /**

@@ -41,7 +41,8 @@ načtou dál a dostanou vzhled Invoo bez barvy a loga, s patičkou.
 Data verze 3 mají vlastní klíč `invoo.data.v3` (rozepsaná faktura `invoo.draft.v3`). Dřívější data z klíče
 `invoo.data.v2` se jen přečtou; při první uložené změně se zapíšou pod nový klíč a teprve potom se starý klíč
 odstraní (nevejdou-li se obě kopie vedle sebe, uvolní starý klíč místo předem a při neúspěchu se vrátí beze změny).
-Rozepsaná faktura z dřívější verze se při tom přenese s daty. Pod starý klíč už Invoo nic nového nezapisuje.
+Rozepsaná faktura z dřívější verze se při tom přenese s daty (zkopíruje se; když se dvě kopie do úložiště nevejdou,
+přesune se). Pod starý klíč už Invoo nic nového nezapisuje.
 
 Starší verze Invoo otevřená v jiné záložce novým datům neublíží: verzi 3 nepřečte a ukládá dál jen pod svůj starý
 klíč. Dokud tady nic neuložíš, její změny se přebírají. Potom už její data zůstávají stranou a Invoo na ně upozorní:
@@ -51,9 +52,12 @@ jednou najde data novější verze: nechá je být, přestane ukládat a požád
 
 Co je dobré vědět, než se všechny záložky obnoví na novou verzi:
 
-- Stránka se starší verzí otevřená až po převodu dat (třeba z mezipaměti prohlížeče) svůj klíč nenajde a začne
-  s prázdným přehledem. Data nejsou pryč: stačí stránku obnovit. Nová verze potom nabídne ke stažení a odstranění
-  i ta prázdná data, která si starší stránka mezitím uložila.
+- Stránka se starší verzí otevřená až po převodu dat (třeba z mezipaměti prohlížeče) svůj klíč nenajde. Začne
+  s prázdným přehledem, nebo si znovu převede data z Invokitu, pokud jsou ještě v prohlížeči (klíč `invokit.data.v1`
+  tam zůstává, dokud ho neodstraníš): ukáže pak faktury z Invokitu a jeho poslední fakturu případně nabídne jako
+  rozepsanou. Tvoje současná data nejsou pryč: stačí stránku obnovit. Co si starší stránka mezitím uložila pod svůj
+  klíč (prázdná data, nebo znovu převedená data z Invokitu), nová verze nepřebírá, její rozepsanou fakturu také ne;
+  nabídne to ke stažení a odstranění jako data starší záložky.
 - Data odložená stranou pod `invoo.data.v2` zabírají místo v úložišti prohlížeče. Když se kvůli tomu nepodaří uložit
   změnu, stáhni si je a odstraň (obojí nabízí upozornění nahoře na stránce).
 - Úložiště prohlížeče neumí zamykat mezi záložkami. Uloží-li starší záložka něco přesně ve chvíli, kdy nová verze
@@ -61,7 +65,9 @@ Co je dobré vědět, než se všechny záložky obnoví na novou verzi:
 
 Mezi záložkami stejné verze se změny přebírají samy; před každým uložením si záložka nejdřív načte, co mezitím
 uložila jiná, aby to nepřepsala. Nová faktura, jejíž číslo si mezitím vzala faktura uložená v jiné záložce, se
-neuloží přes ni: formulář zůstane otevřený, rozepsaná faktura zůstane a Invoo řekne, že číslo už existuje.
+neuloží přes ni: formulář zůstane otevřený, rozepsaná faktura zůstane (i po obnovení stránky) a Invoo řekne, že číslo
+už existuje. Smaže-li jiná záložka fakturu, kterou máš právě otevřenou k úpravě, formulář zůstane i s tím, co jsi
+napsal, a Invoo na to upozorní; uložením se faktura vrátí mezi uložené, se stavem zaplacení, jaký měla při otevření.
 
 Přechod z Invokitu (dřívější název aplikace): data ze starého klíče `invokit.data.v1` i zálohy verze 1 se při prvním
 spuštění nebo při obnově automaticky převedou na aktuální verzi se stejnými částkami; starý klíč zůstává v prohlížeči

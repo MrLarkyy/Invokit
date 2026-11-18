@@ -63,21 +63,23 @@ function upsertCatalog(catalog: CatalogItem[], items: InvoiceItem[]): CatalogIte
 
 /**
  * Saves the invoice by id (newest number first), without empty rows, and remembers its customer and items: with
- * `create` as a new invoice, otherwise in place of the one with its id, whose paid state stays as it was. Throws
- * the Czech saveProblem when the invoice cannot be stored.
+ * `create` as a new invoice, unpaid; otherwise in place of the one with its id, whose paid state stays as it was.
+ * An edit of an invoice that is no longer among the saved ones (another tab deleted it meanwhile) puts it back,
+ * paid as the edit holds it. Throws the Czech saveProblem when the invoice cannot be stored.
  */
 export function saveInvoice<T extends InvoiceRecords>(data: T, invoice: Invoice, now: string, create = false): T {
   const problem = saveProblem(data, invoice, create);
   if (problem) throw new Error(problem);
   const previous = data.invoices.find((i) => i.id === invoice.id);
   const copy = structuredClone(invoice);
+  const payment = create ? { paid: false, paidAt: null } : (previous ?? copy);
   const saved: Invoice = {
     ...copy,
     number: copy.number.trim(),
     items: filledItems(copy.items),
     savedAt: now,
-    paid: previous?.paid ?? false,
-    paidAt: previous?.paidAt ?? null,
+    paid: payment.paid,
+    paidAt: payment.paidAt,
   };
   const invoices = [...data.invoices.filter((i) => i.id !== invoice.id), saved].sort((a, b) =>
     b.number.localeCompare(a.number),

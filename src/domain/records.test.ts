@@ -47,6 +47,24 @@ describe('saveInvoice', () => {
     expect(data.items[0]?.unitPriceCents).toBe(90_000);
   });
 
+  it('puts back an edited invoice that is no longer saved, paid as the edit holds it', () => {
+    let data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a', true);
+    data = setPaid(data, '2026-09-001', '2026-09-10');
+    const edited = { ...structuredClone(data.invoices[0]!), note: 'Děkujeme.' };
+    const restored = saveInvoice(deleteInvoice(data, '2026-09-001'), edited, 'b', false);
+    expect(restored.invoices).toEqual([{ ...edited, savedAt: 'b' }]);
+    expect(restored.invoices[0]).toMatchObject({ paid: true, paidAt: '2026-09-10' });
+    // Never the other way round: the stored paid state wins over what an open editor still holds.
+    const stale = { ...edited, paid: false, paidAt: null };
+    expect(saveInvoice(data, stale, 'c', false).invoices[0]).toMatchObject({ paid: true, paidAt: '2026-09-10' });
+  });
+
+  it('never stores a new invoice as paid', () => {
+    const copy = { ...invoice('2026-09-001'), paid: true, paidAt: '2026-09-10' };
+    const data = saveInvoice(emptyAppData(), copy, 'a', true);
+    expect(data.invoices[0]).toMatchObject({ paid: false, paidAt: null });
+  });
+
   it('refuses a number another invoice already uses', () => {
     const data = saveInvoice(emptyAppData(), invoice('2026-09-001'), 'a');
     const other = { ...invoice('2026-09-001'), id: 'other' };

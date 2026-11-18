@@ -55,6 +55,19 @@ describe('DraftSession', () => {
     expect(new DraftSession(storage).load()).toBeNull();
   });
 
+  it('shares one stored draft with other tabs: removed by another tab’s save, it is back once written again', () => {
+    const storage = new MemoryStorage();
+    const mine = new DraftSession(storage);
+    const draft = forCustomer('Druhý odběratel a.s.');
+    mine.save(draft, true);
+    // Another tab saves its new invoice and clears the draft.
+    new DraftSession(storage).save(null, true);
+    expect(new DraftSession(storage).load()).toBeNull();
+    // This tab's save was refused: the editor writes the invoice it still shows back as the draft.
+    mine.save(draft, true);
+    expect(new DraftSession(storage).load()).toEqual(draft);
+  });
+
   it('holds the draft in memory when the browser refuses the write', () => {
     const storage = new MemoryStorage();
     storage.failWrites = true;

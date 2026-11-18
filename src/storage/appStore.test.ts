@@ -662,6 +662,44 @@ describe('another tab of this version', () => {
   });
 });
 
+describe('an invoice deleted in another tab while this tab edits it', () => {
+  const paidInvoice = fixtureInvoice({ paid: true, paidAt: '2026-09-10' });
+
+  it('is put back by saving the edit, with the paid state and date the editor held', () => {
+    const storage = holding({ [DATA_KEY]: text(withInvoices(paidInvoice, other(1))) });
+    const deleting = open(storage);
+    const editing = open(storage);
+    const edit = { ...structuredClone(editing.data.invoices.find((i) => i.id === paidInvoice.id)!), note: 'Děkujeme.' };
+
+    const deleted = changeAppStore(storage, deleting, { type: 'invoice/delete', id: paidInvoice.id });
+    expect(deleted.written).toBe('saved');
+    expect(loadAppData(storage).data.invoices.map((i) => i.id)).toEqual(['other-1']);
+
+    // No event reached the editing tab before it saved.
+    const now = '2026-10-05T10:00:00Z';
+    const saved = changeAppStore(storage, editing, { type: 'invoice/save', invoice: edit, now, create: false });
+    expect(saved).toMatchObject({ written: 'saved', problem: null });
+    expect(outcomeOf(saved, true)).toEqual({ result: 'stored' });
+    const stored = loadAppData(storage).data.invoices;
+    expect(stored.map((i) => i.id)).toEqual(['other-1', paidInvoice.id]);
+    expect(stored[1]).toEqual({ ...edit, savedAt: now });
+    expect(stored[1]).toMatchObject({ paid: true, paidAt: '2026-09-10', note: 'Děkujeme.' });
+  });
+
+  it('is put back the same way once the delete has reached the editing tab', () => {
+    const storage = holding({ [DATA_KEY]: text(withInvoices(paidInvoice)) });
+    const editing = open(storage);
+    const edit = { ...structuredClone(editing.data.invoices[0]!), note: 'Děkujeme.' };
+    changeAppStore(storage, open(storage), { type: 'invoice/delete', id: paidInvoice.id });
+    const followed = synced(storage, editing);
+    expect(followed.data.invoices).toEqual([]);
+
+    const saved = changeAppStore(storage, followed, { type: 'invoice/save', invoice: edit, now: 'b', create: false });
+    expect(outcomeOf(saved, true)).toEqual({ result: 'stored' });
+    expect(loadAppData(storage).data.invoices).toEqual([{ ...edit, savedAt: 'b' }]);
+  });
+});
+
 describe('two tabs offered the same next invoice number', () => {
   const TODAY = '2026-10-05';
   /** A new invoice as the editor builds it from the data its tab shows: the next number, and the id made of it. */

@@ -468,6 +468,33 @@ describe('the draft', () => {
     expect(loadDraft(own)?.number).toBe('2026-09-007');
   });
 
+  it('is moved instead of copied when the browser has room for one draft only', () => {
+    const before = olderDraft('2026-09-005');
+    const oneDraft = DRAFT_KEY.length + before.length;
+    // The previous data make room first, then the data fit next to one copy of the draft, never two.
+    const tight = new QuotaStorage(DATA_KEY.length + V3.length + oneDraft + 10);
+    holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before }, tight);
+    expect(writeDataText(tight, V3, V2)).toBe(true);
+    expect(snapshot(tight)).toEqual({ [DATA_KEY]: V3, [DRAFT_KEY]: before });
+    expect(loadDraft(tight)).toEqual(fixtureInvoice({ number: '2026-09-005' }));
+
+    // The same on a start that stores the first data itself, with nothing to make room.
+    const first = JSON.stringify(emptyAppData());
+    const start = new QuotaStorage(DATA_KEY.length + first.length + oneDraft + 10);
+    holding({ [PREVIOUS_DRAFT_KEY]: before }, start);
+    expect(loadAppData(start).storedText).toBe(first);
+    expect(snapshot(start)).toEqual({ [DATA_KEY]: first, [DRAFT_KEY]: before });
+    expect(loadDraft(start)).toEqual(fixtureInvoice({ number: '2026-09-005' }));
+  });
+
+  it('stays under the previous key, unchanged, when the browser refuses the draft key altogether', () => {
+    const before = olderDraft('2026-09-005');
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
+    storage.failingKeys.add(DRAFT_KEY);
+    expect(writeDataText(storage, V3, V2)).toBe(true);
+    expect(snapshot(storage)).toEqual({ [DATA_KEY]: V3, [PREVIOUS_DRAFT_KEY]: before });
+  });
+
   it('is not carried when the data could not be stored: the previous draft is still read', () => {
     const before = olderDraft('2026-09-005');
     const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
