@@ -15,8 +15,8 @@ if (root) {
   const updates = import.meta.env.PROD ? startServiceWorker() : null;
   createRoot(root).render(
     <StrictMode>
-      <App />
       {updates && <UpdatePrompt store={updates} />}
+      <App />
     </StrictMode>,
   );
 }

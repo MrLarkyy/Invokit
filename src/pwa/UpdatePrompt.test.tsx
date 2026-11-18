@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { UpdatePrompt } from './UpdatePrompt';
@@ -31,5 +33,12 @@ describe('UpdatePrompt', () => {
 
   it('tells the user to save unfinished edits', () => {
     expect(renderToStaticMarkup(<UpdatePrompt store={storeIn('ready')} />)).toContain('ulož rozdělané úpravy');
+  });
+
+  it('is styled as an in-flow strip that covers nothing and is hidden in print', () => {
+    const css = readFileSync(join(import.meta.dirname, 'updatePrompt.css'), 'utf8');
+    expect(css).not.toMatch(/position:\s*(fixed|sticky|absolute)|z-index/);
+    expect(css).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+    expect(css).toMatch(/@media print[^}]*\{[^}]*display:\s*none/);
   });
 });
