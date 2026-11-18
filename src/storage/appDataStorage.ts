@@ -98,9 +98,9 @@ function isNewer(text: string): boolean {
 function carryPreviousDraft(storage: Storage): void {
   const previous = read(storage, PREVIOUS_DRAFT_KEY);
   if (previous === null || read(storage, DRAFT_KEY) !== null || write(storage, DRAFT_KEY, previous)) return;
-  if (remove(storage, PREVIOUS_DRAFT_KEY) && !write(storage, DRAFT_KEY, previous)) {
-    write(storage, PREVIOUS_DRAFT_KEY, previous);
-  }
+  if (!remove(storage, PREVIOUS_DRAFT_KEY) || write(storage, DRAFT_KEY, previous)) return;
+  // An older Invoo may have stored its draft in between: that one is newer than the one taken away.
+  if (read(storage, PREVIOUS_DRAFT_KEY) === null) write(storage, PREVIOUS_DRAFT_KEY, previous);
 }
 
 /**

@@ -67,7 +67,8 @@ Mezi záložkami stejné verze se změny přebírají samy; před každým ulož
 uložila jiná, aby to nepřepsala. Nová faktura, jejíž číslo si mezitím vzala faktura uložená v jiné záložce, se
 neuloží přes ni: formulář zůstane otevřený, rozepsaná faktura zůstane (i po obnovení stránky) a Invoo řekne, že číslo
 už existuje. Smaže-li jiná záložka fakturu, kterou máš právě otevřenou k úpravě, formulář zůstane i s tím, co jsi
-napsal, a Invoo na to upozorní; uložením se faktura vrátí mezi uložené, se stavem zaplacení, jaký měla při otevření.
+napsal, a Invoo na to upozorní; uložením se faktura vrátí mezi uložené, se stavem zaplacení, jaký měla při otevření,
+ale bez loga, pokud se s ní z prohlížeče odstranilo i logo, které už nepoužívala žádná jiná faktura ani nastavení.
 
 Přechod z Invokitu (dřívější název aplikace): data ze starého klíče `invokit.data.v1` i zálohy verze 1 se při prvním
 spuštění nebo při obnově automaticky převedou na aktuální verzi se stejnými částkami; starý klíč zůstává v prohlížeči

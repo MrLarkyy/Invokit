@@ -495,6 +495,21 @@ describe('the draft', () => {
     expect(snapshot(storage)).toEqual({ [DATA_KEY]: V3, [PREVIOUS_DRAFT_KEY]: before });
   });
 
+  it('is not put back over a draft an older Invoo stored while the previous draft key was empty', () => {
+    const before = olderDraft('2026-09-005');
+    const since = olderDraft('2026-09-006');
+    class OlderTabDrafting extends MemoryStorage {
+      override removeItem(key: string): void {
+        super.removeItem(key);
+        if (key === PREVIOUS_DRAFT_KEY) super.setItem(PREVIOUS_DRAFT_KEY, since);
+      }
+    }
+    const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before }, new OlderTabDrafting());
+    storage.failingKeys.add(DRAFT_KEY);
+    expect(writeDataText(storage, V3, V2)).toBe(true);
+    expect(snapshot(storage)).toEqual({ [DATA_KEY]: V3, [PREVIOUS_DRAFT_KEY]: since });
+  });
+
   it('is not carried when the data could not be stored: the previous draft is still read', () => {
     const before = olderDraft('2026-09-005');
     const storage = holding({ [PREVIOUS_DATA_KEY]: V2, [PREVIOUS_DRAFT_KEY]: before });
