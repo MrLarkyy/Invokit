@@ -6,7 +6,9 @@ import { ACCENT, CORNER_RADIUS, EYES, EYE_RADIUS, INK, PUPIL_RADIUS, VIEW, WHITE
 const svg = readFileSync(join(import.meta.dirname, '..', 'public', 'favicon.svg'), 'utf8');
 
 function attributes(tag: string): Record<string, string> {
-  return Object.fromEntries([...tag.matchAll(/([A-Za-z-]+)="([^"]*)"/g)].map((match) => [match[1] ?? '', match[2] ?? '']));
+  return Object.fromEntries(
+    [...tag.matchAll(/([A-Za-z-]+)="([^"]*)"/g)].map((match) => [match[1] ?? '', match[2] ?? '']),
+  );
 }
 
 function hex(colour: Rgb): string {
