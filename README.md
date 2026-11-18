@@ -100,6 +100,7 @@ je v `public/licenses/`.
 
 ## Instalace a offline
 
-Invoo jde nainstalovat jako aplikace a po jedné online návštěvě se otevře i bez připojení; nová verze se nabídne
-pruhem „Nová verze“ nahoře na stránce a nikdy se nenačte sama. Podrobnosti jsou v [docs/offline.md](docs/offline.md). Ikony aplikace vznikají z vlastního loga
-projektu příkazem `pnpm icons`.
+Invoo jde nainstalovat jako aplikace a po jedné online návštěvě se otevře i bez připojení. Nová verze se nabídne pruhem
+„Nová verze“ nahoře na stránce: otevřená stránka se sama nepřepne, nová verze se načte po kliknutí ve výzvě, nebo při
+dalším otevření, až budou všechny karty Invoo zavřené. Podrobnosti jsou v [docs/offline.md](docs/offline.md). Ikony
+aplikace vznikají z vlastního loga projektu příkazem `pnpm icons`.

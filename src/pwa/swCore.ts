@@ -7,7 +7,7 @@ export interface RequestInfo {
 export type Route = { kind: 'cache'; key: string } | { kind: 'shell' } | { kind: 'pass' };
 
 function scopePrefix(scope: string): string {
-  return `invoo-${encodeURIComponent(new URL(scope).pathname)}-`;
+  return `invoo-${encodeURIComponent(new URL(scope).pathname).replaceAll('-', '%2D')}-`;
 }
 
 // The scope path is part of the name so two copies on one origin never delete each other's caches.

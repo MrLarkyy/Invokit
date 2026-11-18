@@ -118,6 +118,24 @@ describe('cache names', () => {
     expect(staleCaches([cacheName(inner, 'old')], outer, cacheName(outer, 'new'))).toEqual([]);
     expect(staleCaches([cacheName(outer, 'old')], inner, cacheName(inner, 'new'))).toEqual([]);
   });
+
+  it('does not match a scope whose name continues with a dash', () => {
+    const outer = 'https://x.github.io/a/';
+    const dashed = 'https://x.github.io/a/-x/';
+    expect(staleCaches([cacheName(dashed, 'old')], outer, cacheName(outer, 'new'))).toEqual([]);
+    expect(staleCaches([cacheName(outer, 'old')], dashed, cacheName(dashed, 'new'))).toEqual([]);
+  });
+
+  it('finds the older cache of a scope with a dash in its name', () => {
+    const app = 'https://x.github.io/my-app/';
+    expect(staleCaches([cacheName(app, 'old'), cacheName(app, 'new')], app, cacheName(app, 'new'))).toEqual([
+      cacheName(app, 'old'),
+    ]);
+  });
+
+  it('keeps the shape of the root scope name', () => {
+    expect(cacheName('https://invoo.cz/', 'abc')).toBe('invoo-%2F-abc');
+  });
 });
 
 describe('isSkipWaitingMessage', () => {
