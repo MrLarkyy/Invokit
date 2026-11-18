@@ -52,5 +52,5 @@ je v `public/licenses/`.
 ## Instalace a offline
 
 Invoo jde nainstalovat jako aplikace a po jedné online návštěvě se otevře i bez připojení; nová verze se nabídne
-hláškou „Nová verze“. Podrobnosti jsou v [docs/offline.md](docs/offline.md). Ikony aplikace vznikají z vlastního loga
+pruhem „Nová verze“ nahoře na stránce a nikdy se nenačte sama. Podrobnosti jsou v [docs/offline.md](docs/offline.md). Ikony aplikace vznikají z vlastního loga
 projektu příkazem `pnpm icons`.
