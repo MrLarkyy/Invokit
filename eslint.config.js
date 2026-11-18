@@ -17,6 +17,10 @@ export default defineConfig(
     },
   },
   {
+    files: ['tools/**/*.ts'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ['**/*.tsx'],
     extends: [reactHooks.configs.flat.recommended],
   },

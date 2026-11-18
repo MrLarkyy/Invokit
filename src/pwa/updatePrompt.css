@@ -1,0 +1,49 @@
+/* An in-flow strip at the top of the page: it pushes the page down and so never covers toasts or actions. */
+.update-prompt {
+  background: var(--ink);
+  color: var(--on-dark);
+}
+
+.update-prompt__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 12px 20px;
+}
+
+.update-prompt__text {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.update-prompt__text strong {
+  margin-right: 6px;
+  color: var(--surface);
+}
+
+.update-prompt__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.update-prompt__later {
+  background: transparent;
+  border-color: var(--muted-on-dark);
+  color: var(--on-dark);
+}
+
+.update-prompt__later:hover {
+  background: var(--ink-3);
+}
+
+@media print {
+  .update-prompt-region {
+    display: none;
+  }
+}
