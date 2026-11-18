@@ -1,0 +1,16 @@
+{
+  "name": "Invoo",
+  "short_name": "Invoo",
+  "lang": "cs",
+  "description": "Invoo: faktury s QR platbou zdarma a bez registrace. Všechno běží v tvém prohlížeči.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#111413",
+  "background_color": "#f1f2ee",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
