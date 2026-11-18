@@ -48,3 +48,9 @@ vlastní doménu je potřeba nastavit i v Settings → Pages a v DNS.
 
 Písma Baloo 2 a Nunito jsou přibalená z balíčků Fontsource a šíří se pod licencí SIL Open Font License 1.1; plné znění
 je v `public/licenses/`.
+
+## Instalace a offline
+
+Invoo jde nainstalovat jako aplikace a po jedné online návštěvě se otevře i bez připojení; nová verze se nabídne
+hláškou „Nová verze“. Podrobnosti jsou v [docs/offline.md](docs/offline.md). Ikony aplikace vznikají z vlastního loga
+projektu příkazem `pnpm icons`.
