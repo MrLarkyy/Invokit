@@ -96,6 +96,27 @@ describe('createUpdateStore', () => {
     expect(t.store.getSnapshot()).toBe('ready');
   });
 
+  it('watches a worker that was already installing at registration', async () => {
+    const worker = new FakeWorker();
+    const t = setup((c) => (c.registration.installing = worker));
+    await flush();
+    worker.state = 'installed';
+    worker.dispatchEvent(new Event('statechange'));
+    expect(t.store.getSnapshot()).toBe('ready');
+  });
+
+  it('stays idle when the worker installing at registration is a first install', async () => {
+    const worker = new FakeWorker();
+    const t = setup((c) => {
+      c.controller = null;
+      c.registration.installing = worker;
+    });
+    await flush();
+    worker.state = 'installed';
+    worker.dispatchEvent(new Event('statechange'));
+    expect(t.store.getSnapshot()).toBe('idle');
+  });
+
   it('notifies subscribers', async () => {
     const t = setup((c) => (c.registration.waiting = new FakeWorker()));
     let calls = 0;

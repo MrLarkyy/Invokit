@@ -1,4 +1,4 @@
-import { cacheName, cachedOrNetwork, isSkipWaitingMessage, routeRequest, staleCaches } from './swCore';
+import { atMostOnce, cacheName, cachedOrNetwork, isSkipWaitingMessage, routeRequest, staleCaches } from './swCore';
 
 // Replaced at build time by tools/serviceWorkerPlugin.ts.
 declare const __INVOO_PRECACHE__: string[];
@@ -24,20 +24,25 @@ interface WorkerScope {
 
 const worker = self as unknown as WorkerScope;
 const scope = worker.registration.scope;
-const CURRENT = cacheName(__INVOO_VERSION__);
+const CURRENT = cacheName(scope, __INVOO_VERSION__);
 const urls = __INVOO_PRECACHE__.map((entry) => new URL(entry, scope));
 const precached = new Set(urls.map((url) => `${url.origin}${url.pathname}${url.search}`));
 const shellKey = new URL('index.html', scope).href;
 
+function precache(): Promise<void> {
+  return caches.open(CURRENT).then((cache) => cache.addAll(urls.map((url) => new Request(url, { cache: 'reload' }))));
+}
+
+// A deleted cache is refilled once per worker start; addAll is atomic, so a failure leaves it empty until the next start.
+const refill = atMostOnce(precache);
+
 worker.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CURRENT).then((cache) => cache.addAll(urls.map((url) => new Request(url, { cache: 'reload' })))),
-  );
+  event.waitUntil(precache());
 });
 
 worker.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(staleCaches(keys, CURRENT).map((key) => caches.delete(key)))),
+    caches.keys().then((keys) => Promise.all(staleCaches(keys, scope, CURRENT).map((key) => caches.delete(key)))),
   );
 });
 
@@ -46,12 +51,17 @@ worker.addEventListener('fetch', (event) => {
   const route = routeRequest({ method: request.method, url: request.url, mode: request.mode }, scope, precached);
   if (route.kind === 'pass') return;
   const key = route.kind === 'cache' ? route.key : shellKey;
-  event.respondWith(
-    cachedOrNetwork(
-      async () => (await caches.open(CURRENT)).match(key),
-      () => fetch(request),
-    ),
+  let missed = true;
+  const response = cachedOrNetwork(
+    async () => {
+      const hit = await (await caches.open(CURRENT)).match(key);
+      missed = hit === undefined;
+      return hit;
+    },
+    () => fetch(request),
   );
+  event.respondWith(response);
+  event.waitUntil(response.then(() => (missed ? refill() : undefined)).catch(() => undefined));
 });
 
 worker.addEventListener('message', (event) => {

@@ -80,6 +80,8 @@ export function createUpdateStore(options: UpdateStoreOptions): UpdateStore {
         lastCheck = now();
         if (found.waiting && container.controller) setState('ready');
         found.addEventListener('updatefound', () => watch(found.installing));
+        // The browser may have started installing before this listener existed.
+        watch(found.installing);
       })
       .catch(() => undefined);
   }

@@ -6,14 +6,18 @@ export interface RequestInfo {
 
 export type Route = { kind: 'cache'; key: string } | { kind: 'shell' } | { kind: 'pass' };
 
-const CACHE_PREFIX = 'invoo-';
-
-export function cacheName(version: string): string {
-  return `${CACHE_PREFIX}${version}`;
+function scopePrefix(scope: string): string {
+  return `invoo-${encodeURIComponent(new URL(scope).pathname)}-`;
 }
 
-export function staleCaches(keys: readonly string[], current: string): string[] {
-  return keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== current);
+// The scope path is part of the name so two copies on one origin never delete each other's caches.
+export function cacheName(scope: string, version: string): string {
+  return `${scopePrefix(scope)}${version}`;
+}
+
+export function staleCaches(keys: readonly string[], scope: string, current: string): string[] {
+  const prefix = scopePrefix(scope);
+  return keys.filter((key) => key.startsWith(prefix) && key !== current);
 }
 
 export function isSkipWaitingMessage(data: unknown): boolean {
@@ -42,7 +46,10 @@ export function routeRequest(request: RequestInfo, scope: string, precached: Rea
   if (url.origin !== scopeUrl.origin || !url.pathname.startsWith(scopeUrl.pathname)) return { kind: 'pass' };
   const key = `${url.origin}${url.pathname}${url.search}`;
   if (precached.has(key)) return { kind: 'cache', key };
-  return request.mode === 'navigate' ? { kind: 'shell' } : { kind: 'pass' };
+  // Hash routing has one document: only the scope root and index.html are the shell, other paths stay the server's.
+  const below = url.pathname.slice(scopeUrl.pathname.length);
+  const isShell = request.mode === 'navigate' && (below === '' || below === 'index.html');
+  return isShell ? { kind: 'shell' } : { kind: 'pass' };
 }
 
 // The browser may evict Cache Storage; a missing or unreadable entry falls back to the network.
@@ -54,4 +61,13 @@ export async function cachedOrNetwork<T>(lookup: () => Promise<T | undefined>, n
     // fall through to the network
   }
   return network();
+}
+
+// Runs the task on the first call only; later calls share its outcome, so a failure is never retried in a loop.
+export function atMostOnce(task: () => Promise<void>): () => Promise<void> {
+  let started: Promise<void> | null = null;
+  return () => {
+    started ??= task().catch(() => undefined);
+    return started;
+  };
 }

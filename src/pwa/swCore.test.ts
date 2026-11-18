@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cacheName, cachedOrNetwork, isSkipWaitingMessage, routeRequest, staleCaches } from './swCore';
+import { atMostOnce, cacheName, cachedOrNetwork, isSkipWaitingMessage, routeRequest, staleCaches } from './swCore';
 
 const scope = 'https://invoo.cz/';
 const precached = new Set([
@@ -36,8 +36,45 @@ describe('routeRequest', () => {
     expect(route).toEqual({ kind: 'pass' });
   });
 
-  it('answers a navigation inside the scope with the shell', () => {
+  it('answers a navigation to the scope root or index.html with the shell', () => {
+    expect(get('https://invoo.cz/', 'navigate')).toEqual({ kind: 'shell' });
+    expect(get('https://invoo.cz/index.html?x=1', 'navigate')).toEqual({ kind: 'shell' });
     expect(get('https://invoo.cz/?x=1#faktury', 'navigate')).toEqual({ kind: 'shell' });
+  });
+
+  describe('under a project path', () => {
+    const projectScope = 'https://x.github.io/Invokit/';
+    const projectPrecached = new Set(['https://x.github.io/Invokit/assets/x.js']);
+    const navigate = (url: string) =>
+      routeRequest({ method: 'GET', url, mode: 'navigate' }, projectScope, projectPrecached);
+
+    it('serves the shell for the root and index.html only', () => {
+      for (const url of [
+        'https://x.github.io/Invokit/',
+        'https://x.github.io/Invokit/index.html?x=1',
+        'https://x.github.io/Invokit/?x=1#faktury',
+      ]) {
+        expect(navigate(url)).toEqual({ kind: 'shell' });
+      }
+    });
+
+    it('leaves other navigations to the server', () => {
+      for (const path of ['neexistuje', 'a/b', 'sw.js']) {
+        expect(navigate(`https://x.github.io/Invokit/${path}`)).toEqual({ kind: 'pass' });
+      }
+    });
+
+    it('serves a precached asset from the cache', () => {
+      expect(navigate('https://x.github.io/Invokit/assets/x.js')).toEqual({
+        kind: 'cache',
+        key: 'https://x.github.io/Invokit/assets/x.js',
+      });
+    });
+
+    it('passes the path without the slash and a sibling path', () => {
+      expect(navigate('https://x.github.io/Invokit')).toEqual({ kind: 'pass' });
+      expect(navigate('https://x.github.io/Invokit2/')).toEqual({ kind: 'pass' });
+    });
   });
 
   it('gives a navigated precached file its own key', () => {
@@ -57,12 +94,29 @@ describe('routeRequest', () => {
 });
 
 describe('cache names', () => {
-  it('prefixes the version', () => {
-    expect(cacheName('abc')).toBe('invoo-abc');
+  const invokit = 'https://x.github.io/Invokit/';
+  const other = 'https://x.github.io/Jina/';
+
+  it('carries the scope path and the version', () => {
+    expect(cacheName(invokit, 'abc')).toBe('invoo-%2FInvokit%2F-abc');
   });
 
-  it('deletes only older invoo caches', () => {
-    expect(staleCaches(['invoo-old', 'invoo-abc', 'other', 'invoo.data.v2'], 'invoo-abc')).toEqual(['invoo-old']);
+  it('deletes only older caches of the same scope', () => {
+    const keys = [
+      cacheName(invokit, 'old'),
+      cacheName(invokit, 'abc'),
+      cacheName(other, 'old'),
+      'other',
+      'invoo.data.v2',
+    ];
+    expect(staleCaches(keys, invokit, cacheName(invokit, 'abc'))).toEqual([cacheName(invokit, 'old')]);
+  });
+
+  it('does not match a scope nested under another', () => {
+    const outer = 'https://x.github.io/a/';
+    const inner = 'https://x.github.io/a/b/';
+    expect(staleCaches([cacheName(inner, 'old')], outer, cacheName(outer, 'new'))).toEqual([]);
+    expect(staleCaches([cacheName(outer, 'old')], inner, cacheName(inner, 'new'))).toEqual([]);
   });
 });
 
@@ -88,5 +142,31 @@ describe('cachedOrNetwork', () => {
 
   it('falls back to the network when the cache lookup fails', async () => {
     expect(await cachedOrNetwork(() => Promise.reject(new Error('evicted')), network)).toBe('network');
+  });
+});
+
+describe('atMostOnce', () => {
+  it('runs the task once while it is running and after it succeeded', async () => {
+    let runs = 0;
+    const once = atMostOnce(() => {
+      runs++;
+      return Promise.resolve();
+    });
+    const first = once();
+    const second = once();
+    await Promise.all([first, second]);
+    await once();
+    expect(runs).toBe(1);
+  });
+
+  it('does not retry after a failure and does not reject', async () => {
+    let runs = 0;
+    const once = atMostOnce(() => {
+      runs++;
+      return Promise.reject(new Error('offline'));
+    });
+    await once();
+    await once();
+    expect(runs).toBe(1);
   });
 });
