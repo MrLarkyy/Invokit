@@ -4,7 +4,9 @@ import { isValidDic } from '../../czech/dic';
 import { isValidIco } from '../../czech/ico';
 import { formatCzechDate } from '../../domain/dates';
 import type { CatalogItem, Party } from '../../domain/invoice';
+import { isAccent, type InvoiceAppearance } from '../../domain/invoiceAppearance';
 import { LIMITS } from '../../domain/limits';
+import { logoUrl, saveSupplierLogo } from '../../domain/logos';
 import { createBlankInvoice } from '../../domain/newInvoice';
 import { byDescription, byName } from '../../domain/records';
 import { emptyProfile, profileAccount, savedProfile, type SupplierProfile } from '../../domain/supplierProfile';
@@ -15,8 +17,13 @@ import { CUSTOMERS, czechPlural, INVOICES } from '../czechPlural';
 import { AdSlot } from '../components/AdSlot';
 import { Field } from '../components/Field';
 import { IconDownload, IconShield, IconUpload } from '../components/Icons';
+import { InvoicePaper } from '../components/InvoicePaper';
 import { SavedRecords } from '../components/SavedRecords';
+import { TemplatePicker } from '../components/TemplatePicker';
 import { useToast } from '../components/Toast';
+import { Toggle } from '../components/Toggle';
+import { LOGO_ERRORS, readLogoFile } from '../logoFile';
+import { previewInvoice } from '../previewInvoice';
 import { navigate } from '../router';
 import { useStore } from '../StoreProvider';
 import { notStored } from '../texts';
@@ -35,6 +42,13 @@ const BANKS: [string, string][] = [
   ['6210', 'mBank'],
 ];
 
+// The colour picker shows the Invoo orange while no accent is chosen.
+const DEFAULT_ACCENT = '#ff5b1f';
+
+/** The profile without its logo id: the logo is edited apart from the form and compared as an image. */
+const withoutLogoId = (profile: SupplierProfile) =>
+  JSON.stringify({ ...profile, appearance: { ...profile.appearance, logoId: null } });
+
 interface PendingRestore {
   fileName: string;
   data: AppData;
@@ -48,26 +62,57 @@ function ibanPreview(profile: SupplierProfile): string {
 }
 
 export function Settings() {
-  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite, lastWriteFailed, legacyBlocking } = useStore();
+  const { data, dispatch, loadDraft, saveDraft, persistent, canWrite, lastWriteFailed, legacyBlocking, newer } =
+    useStore();
   const toast = useToast();
   const storing = persistent && canWrite && !lastWriteFailed && !legacyBlocking;
   const [saved] = useState(() => savedProfile(data) ?? emptyProfile());
   const [form, setForm] = useState<SupplierProfile>(saved);
+  const [logo, setLogo] = useState(() => logoUrl(data.logos, saved.appearance.logoId));
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingRestore | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
   useDocumentTitle('Nastavení');
 
   const patch = (changes: Partial<SupplierProfile>) => setForm((current) => ({ ...current, ...changes }));
   const patchParty = (changes: Partial<Party>) =>
     setForm((current) => ({ ...current, party: { ...current.party, ...changes } }));
-  const dirty = JSON.stringify(form) !== JSON.stringify(data.supplier ?? saved);
+  const patchAppearance = (changes: Partial<InvoiceAppearance>) =>
+    setForm((current) => ({ ...current, appearance: { ...current.appearance, ...changes } }));
+  const current = data.supplier ?? saved;
+  const dirty =
+    withoutLogoId(form) !== withoutLogoId(current) || logo !== logoUrl(data.logos, current.appearance.logoId);
   const banks =
     form.bankCode && !BANKS.some(([code]) => code === form.bankCode)
       ? [...BANKS, [form.bankCode, 'jiná banka'] as [string, string]]
       : BANKS;
 
+  const pickLogo = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      setLogo(await readLogoFile(file));
+      setLogoError(null);
+    } catch (error) {
+      setLogoError(error instanceof Error ? error.message : LOGO_ERRORS.unreadable);
+    } finally {
+      if (logoInput.current) logoInput.current.value = '';
+    }
+  };
+
   const save = () => {
-    if (dispatch({ type: 'supplier/save', supplier: form })) {
+    try {
+      // The same check the store makes: a logo it cannot keep is reported here instead of a save that does nothing.
+      saveSupplierLogo(data, form, logo);
+    } catch (error) {
+      setLogoError(error instanceof Error ? error.message : LOGO_ERRORS.unreadable);
+      return;
+    }
+    const done = dispatch({ type: 'supplier/save', supplier: form, logo });
+    if (done.result === 'rejected') {
+      // Another tab took the last free logo slot after this page checked.
+      setLogoError(done.reason);
+    } else if (done.result === 'stored') {
       toast('Údaje jsou uložené. Použijí se na nových fakturách, vystavené zůstávají beze změny.', 'happy');
     } else {
       toast(notStored('údaje platí'));
@@ -99,8 +144,11 @@ export function Settings() {
   const confirmRestore = () => {
     if (!pending) return;
     // A confirmed restore also resumes saving that was off: the restored data replaces the unreadable data.
-    const stored = dispatch({ type: 'backup/restore', data: pending.data });
-    setForm(savedProfile(pending.data) ?? emptyProfile());
+    const stored = dispatch({ type: 'backup/restore', data: pending.data }).result === 'stored';
+    const restored = savedProfile(pending.data) ?? emptyProfile();
+    setForm(restored);
+    setLogo(logoUrl(pending.data.logos, restored.appearance.logoId));
+    setLogoError(null);
     if (stored) toast(`Data jsou obnovená ze souboru ${pending.fileName}.`, 'happy');
     else toast(notStored(`data ze souboru ${pending.fileName} zůstanou`));
     setPending(null);
@@ -303,6 +351,98 @@ export function Settings() {
             </Field>
           </section>
 
+          <section className="card">
+            <h2 className="card__title">Vzhled faktury</h2>
+            <p className="field__hint">
+              Platí pro nové faktury. Každá uložená faktura si vzhled pamatuje, změna tady ji nezmění.
+            </p>
+            <TemplatePicker
+              name="s-template"
+              legend="Šablona"
+              value={form.appearance.template}
+              onChange={(template) => patchAppearance({ template })}
+            />
+            <div className="appearance__accent">
+              <Field
+                label="Barva zvýraznění"
+                htmlFor="s-accent"
+                hint={`${form.appearance.accent ? 'Vlastní barva.' : 'Výchozí barva šablony.'} Barví jen plochy, text na nich zůstane čitelný. Klasik se tiskne černobíle.`}
+              >
+                <input
+                  id="s-accent"
+                  className="input input--color"
+                  type="color"
+                  value={form.appearance.accent ?? DEFAULT_ACCENT}
+                  onChange={(event) => {
+                    const accent = event.target.value.toLowerCase();
+                    if (isAccent(accent)) patchAppearance({ accent });
+                  }}
+                />
+              </Field>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={form.appearance.accent === null}
+                onClick={() => patchAppearance({ accent: null })}
+              >
+                Výchozí barva
+              </button>
+            </div>
+            <div className="appearance__logo">
+              <span className="field__label">Logo (nepovinné)</span>
+              <div className="appearance__logo-row">
+                {logo ? (
+                  <img className="appearance__logo-thumb" src={logo} alt="Vybrané logo" />
+                ) : (
+                  <span className="appearance__logo-none">Bez loga</span>
+                )}
+                <input
+                  ref={logoInput}
+                  id="s-logo"
+                  className="visually-hidden file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  aria-describedby="s-logo-hint"
+                  aria-invalid={logoError ? true : undefined}
+                  onChange={(event) => void pickLogo(event.target.files?.[0])}
+                />
+                <label className="btn btn--outline btn--sm" htmlFor="s-logo">
+                  {logo ? 'Změnit logo' : 'Vybrat logo'}
+                </label>
+                {logo ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => {
+                      setLogo(null);
+                      setLogoError(null);
+                    }}
+                  >
+                    Odebrat logo
+                  </button>
+                ) : null}
+              </div>
+              {logoError ? (
+                <p className="field__hint field__hint--error" id="s-logo-hint" role="alert">
+                  {logoError}
+                </p>
+              ) : (
+                <p className="field__hint" id="s-logo-hint">
+                  PNG, JPEG nebo WebP do 5 MB, zmenší se samo. Zůstane jen v tomto prohlížeči a v záloze.
+                </p>
+              )}
+            </div>
+            <Toggle
+              checked={form.appearance.brandFooter}
+              onChange={(brandFooter) => patchAppearance({ brandFooter })}
+              label="Patička Vystaveno v Invoo"
+              hint="Malý řádek „Vystaveno v Invoo · invoo.cz“ dole na faktuře."
+            />
+            <figure className="appearance__preview" aria-label="Náhled vzhledu faktury">
+              <InvoicePaper invoice={previewInvoice(form, todayIso())} logo={logo} />
+            </figure>
+          </section>
+
           <div className="editor__save">
             <button type="button" className="btn btn--primary btn--lg" onClick={save} disabled={!dirty}>
               Uložit údaje
@@ -357,7 +497,7 @@ export function Settings() {
                   Soubor <strong>{pending.fileName}</strong>: {czechPlural(pending.data.invoices.length, INVOICES)},{' '}
                   {czechPlural(pending.data.customers.length, CUSTOMERS)}. Obnovit data? Přepíše to všechno, co je teď
                   uložené.
-                  {canWrite ? null : ' Přepíše to i původní nečitelná data: nejdřív si je nahoře stáhni.'}
+                  {canWrite || newer ? null : ' Přepíše to i původní nečitelná data: nejdřív si je nahoře stáhni.'}
                 </p>
                 <div className="restore__actions">
                   <button type="button" className="btn btn--primary btn--sm" onClick={confirmRestore}>

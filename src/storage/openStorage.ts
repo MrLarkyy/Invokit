@@ -1,3 +1,4 @@
+import { DATA_KEY } from './appDataStorage';
 import { MemoryStorage } from './memoryStorage';
 
 export interface OpenedStorage {
@@ -13,7 +14,7 @@ export interface OpenedStorage {
 export function openStorage(get: () => Storage): OpenedStorage {
   try {
     const storage = get();
-    storage.getItem('invoo.data.v2');
+    storage.getItem(DATA_KEY);
     return { storage, persistent: true };
   } catch {
     return { storage: new MemoryStorage(), persistent: false };

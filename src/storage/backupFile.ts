@@ -26,7 +26,7 @@ export function downloadBackup(data: AppData, today: string): void {
   downloadText(backupText(data), backupFileName(today));
 }
 
-/** Reads a backup (v2, or v1 migrated); throws a Czech message, before reading a file over the size limit too. */
+/** Reads a backup (v3; v2 and v1 migrated); throws a Czech message, before reading a file over the size limit too. */
 export async function readBackup(file: File): Promise<AppData> {
   if (file.size > LIMITS.fileBytes) throw new Error(FILE_TOO_LARGE);
   let text: string;

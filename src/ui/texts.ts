@@ -1,6 +1,7 @@
 import { formatCzechDate } from '../domain/dates';
 import type { Invoice } from '../domain/invoice';
 import { daysToDue, type InvoiceStatus } from '../domain/invoiceStatus';
+import type { AppStoreOutcome } from '../storage/appStore';
 import { czechPlural, DAYS } from './czechPlural';
 
 export const STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -27,7 +28,11 @@ export function notStored(what: string): string {
   return `Neuloženo: ${what} jen do zavření stránky.`;
 }
 
-/** A success message may stand alone only when the change is stored; otherwise it says that it is not. */
-export function withStoredNote(message: string, stored: boolean): string {
-  return stored ? message : `${message} ${notStored('změna platí')}`;
+/**
+ * A success message may stand alone only when the change is stored. One kept for this visit says so; a rejected
+ * change did not happen, so its reason is said instead.
+ */
+export function withStoredNote(message: string, outcome: AppStoreOutcome): string {
+  if (outcome.result === 'rejected') return outcome.reason;
+  return outcome.result === 'stored' ? message : `${message} ${notStored('změna platí')}`;
 }

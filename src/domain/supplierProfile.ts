@@ -1,5 +1,6 @@
 import { formatCzechAccount, parseCzechAccount } from '../czech/czechIban';
 import { emptyParty, type Invoice, type Party, type SupplierSnapshot } from './invoice';
+import { defaultAppearance, type InvoiceAppearance } from './invoiceAppearance';
 import { isCompleteSupplier } from './invoiceValidation';
 
 /** The user's own details, edited in Settings and copied into each invoice when it is saved. */
@@ -11,6 +12,8 @@ export interface SupplierProfile {
   accountPrefix: string;
   accountNumber: string;
   bankCode: string;
+  /** The default look of new invoices. */
+  appearance: InvoiceAppearance;
 }
 
 export function emptyProfile(): SupplierProfile {
@@ -22,6 +25,7 @@ export function emptyProfile(): SupplierProfile {
     accountPrefix: '',
     accountNumber: '',
     bankCode: '',
+    appearance: defaultAppearance(),
   };
 }
 
@@ -70,7 +74,10 @@ export function completeSupplierSnapshot(
   return { ...snapshot, party };
 }
 
-/** A profile rebuilt from an invoice; an account that does not parse leaves the account fields empty. */
+/**
+ * A profile rebuilt from an invoice, with the default look; an account that does not parse leaves the account fields
+ * empty.
+ */
 export function profileFromSnapshot(snapshot: SupplierSnapshot): SupplierProfile {
   const account = parseCzechAccount(snapshot.bankAccount);
   return {
@@ -81,6 +88,7 @@ export function profileFromSnapshot(snapshot: SupplierSnapshot): SupplierProfile
     accountPrefix: account?.prefix ?? '',
     accountNumber: account?.number ?? '',
     bankCode: account?.bankCode ?? '',
+    appearance: defaultAppearance(),
   };
 }
 

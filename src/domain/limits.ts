@@ -12,6 +12,9 @@ export const LIMITS = {
   quantity: 1_000_000,
   unitPriceCents: 100_000_000_000,
   lineCents: 1_000_000_000_000,
+  // A logo is a data URL of at most this many characters; all of them together stay under 1 MB of the quota.
+  logoChars: 50_000,
+  logos: 20,
 } as const;
 
 export const FILE_TOO_LARGE = 'Soubor je příliš velký (nejvýš 10 MB).';

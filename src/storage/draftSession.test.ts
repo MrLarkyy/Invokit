@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureInvoice } from '../test/invoiceFixture';
-import { DRAFT_KEY, saveDraft } from './appDataStorage';
+import { DRAFT_KEY, PREVIOUS_DRAFT_KEY, saveDraft } from './appDataStorage';
 import { DraftSession } from './draftSession';
 import { MemoryStorage } from './memoryStorage';
 
@@ -34,6 +34,38 @@ describe('DraftSession', () => {
     session.save(null, false);
     expect(session.load()).toBeNull();
     expect(storage.getItem(DRAFT_KEY)).toBe(before);
+  });
+
+  it('opens a draft an older Invoo left and touches its key only once this tab may write', () => {
+    const storage = new MemoryStorage();
+    const before = JSON.stringify(forCustomer('Koncept z dřívějška s.r.o.'));
+    storage.setItem(PREVIOUS_DRAFT_KEY, before);
+    const session = new DraftSession(storage);
+    expect(session.load()?.customer.name).toBe('Koncept z dřívějška s.r.o.');
+    session.save(forCustomer('Upravený odběratel s.r.o.'), false);
+    session.save(null, false);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBe(before);
+    expect(storage.getItem(DRAFT_KEY)).toBeNull();
+
+    session.save(forCustomer('Upravený odběratel s.r.o.'), true);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBe(before);
+    expect(new DraftSession(storage).load()?.customer.name).toBe('Upravený odběratel s.r.o.');
+    session.save(null, true);
+    expect(storage.getItem(PREVIOUS_DRAFT_KEY)).toBeNull();
+    expect(new DraftSession(storage).load()).toBeNull();
+  });
+
+  it('shares one stored draft with other tabs: removed by another tab’s save, it is back once written again', () => {
+    const storage = new MemoryStorage();
+    const mine = new DraftSession(storage);
+    const draft = forCustomer('Druhý odběratel a.s.');
+    mine.save(draft, true);
+    // Another tab saves its new invoice and clears the draft.
+    new DraftSession(storage).save(null, true);
+    expect(new DraftSession(storage).load()).toBeNull();
+    // This tab's save was refused: the editor writes the invoice it still shows back as the draft.
+    mine.save(draft, true);
+    expect(new DraftSession(storage).load()).toEqual(draft);
   });
 
   it('holds the draft in memory when the browser refuses the write', () => {

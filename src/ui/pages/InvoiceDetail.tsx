@@ -1,5 +1,6 @@
 import { getStatus } from '../../domain/invoiceStatus';
 import { computeTotals } from '../../domain/invoiceTotals';
+import { logoUrl } from '../../domain/logos';
 import { formatCzk } from '../../domain/money';
 import { todayIso } from '../clock';
 import { AdSlot } from '../components/AdSlot';
@@ -31,19 +32,20 @@ export function InvoiceDetail({ id }: { id: string }) {
 
   const togglePaid = () => {
     if (invoice.paid) {
-      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
-      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, stored));
+      const done = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: null });
+      toast(withStoredNote(`Faktura ${invoice.number} je zpátky mezi nezaplacenými.`, done));
     } else {
-      const stored = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
-      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, stored), stored ? 'happy' : 'watch');
+      const done = dispatch({ type: 'invoice/setPaid', id: invoice.id, paidAt: today });
+      const tone = done.result === 'stored' ? 'happy' : 'watch';
+      toast(withStoredNote(`Faktura ${invoice.number} je zaplacená. Dobrá práce.`, done), tone);
     }
   };
 
   const remove = () => {
     if (!window.confirm(`Smazat fakturu ${invoice.number}? Smaže se jen z tohoto prohlížeče a nejde to vrátit.`))
       return;
-    const stored = dispatch({ type: 'invoice/delete', id: invoice.id });
-    toast(withStoredNote(`Faktura ${invoice.number} je smazaná.`, stored));
+    const done = dispatch({ type: 'invoice/delete', id: invoice.id });
+    toast(withStoredNote(`Faktura ${invoice.number} je smazaná.`, done));
     navigate({ name: 'faktury' });
   };
 
@@ -56,7 +58,7 @@ export function InvoiceDetail({ id }: { id: string }) {
 
       <div className="detail">
         <div className="detail__paper">
-          <InvoicePaper invoice={invoice} />
+          <InvoicePaper invoice={invoice} logo={logoUrl(data.logos, invoice.appearance.logoId)} />
         </div>
 
         <aside className="detail__side">

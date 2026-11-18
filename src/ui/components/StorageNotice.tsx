@@ -1,16 +1,34 @@
 import { useState } from 'react';
 import { downloadBackup, downloadText } from '../../storage/backupFile';
 import { todayIso } from '../clock';
+import { olderTabNotice } from '../olderTabNotice';
 import { useStore } from '../StoreProvider';
 import { IconAlert, IconDownload } from './Icons';
 import { useToast } from './Toast';
 
-/** Warnings about the browser storage: blocked, unreadable data, or Invokit data that no longer fits. */
+/**
+ * Warnings about the browser storage: blocked, unreadable data, data of a newer Invoo, an older Invoo saving in
+ * another tab, or Invokit data that no longer fits.
+ */
 export function StorageNotice() {
-  const { data, dispatch, persistent, canWrite, dataReplaced, loaded, legacyBlocking, removeLegacy } = useStore();
+  const {
+    data,
+    dispatch,
+    persistent,
+    canWrite,
+    dataReplaced,
+    olderTab,
+    newer,
+    downloadOlder,
+    dropOlder,
+    loaded,
+    legacyBlocking,
+    removeLegacy,
+  } = useStore();
   const toast = useToast();
   const [backupTaken, setBackupTaken] = useState(false);
   const [originalTaken, setOriginalTaken] = useState(false);
+  const [olderTaken, setOlderTaken] = useState<string | null>(null);
 
   const downloadOriginal = () => {
     if (loaded.unreadableText === null) return;
@@ -21,7 +39,9 @@ export function StorageNotice() {
   // The first write replaces the unreadable data, so it waits for the download and the user's consent.
   const resumeSaving = () => {
     const agreed = window.confirm('Zapnout ukládání? Původní data se v prohlížeči přepíšou, zůstanou jen v souboru.');
-    if (agreed && dispatch({ type: 'saving/resume' })) toast('Ukládání je zapnuté, data jsou uložená.', 'happy');
+    if (!agreed) return;
+    if (dispatch({ type: 'saving/resume' }).result === 'stored')
+      toast('Ukládání je zapnuté, data jsou uložená.', 'happy');
   };
 
   const takeBackup = () => {
@@ -29,6 +49,20 @@ export function StorageNotice() {
     downloadBackup({ ...data, lastBackupAt: today }, today);
     dispatch({ type: 'backup/exported', at: today });
     setBackupTaken(true);
+  };
+
+  const takeOlder = () => setOlderTaken(downloadOlder());
+
+  // Only the text that was downloaded is removed: what the older tab saved after the download stays.
+  const removeOlder = () => {
+    if (olderTaken === null) return;
+    if (!window.confirm('Odstranit data starší záložky z tohoto prohlížeče? Zůstanou jen ve staženém souboru.')) return;
+    if (dropOlder(olderTaken)) {
+      toast('Data starší záložky jsou z prohlížeče pryč.', 'happy');
+    } else {
+      setOlderTaken(null);
+      toast('Starší záložka mezitím uložila něco dalšího, nebo data nejdou odstranit. Stáhni si je znovu.');
+    }
   };
 
   const removeOld = () => {
@@ -83,6 +117,41 @@ export function StorageNotice() {
                     Zapnout ukládání
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {newer ? (
+        <div className="container banner" role="alert">
+          <IconAlert size={18} />
+          <p>
+            Data v tomhle prohlížeči uložila novější verze Invoo, než je v téhle záložce. Aby se nepoškodila, nic se
+            tady teď neukládá. Obnov stránku, načte se nová verze i s daty.
+          </p>
+        </div>
+      ) : null}
+
+      {olderTab !== null && !newer ? (
+        <div className="container banner" role="alert">
+          <IconAlert size={18} />
+          <div className="banner__body">
+            <p>{olderTabNotice(olderTab)}</p>
+            {olderTab === 'aside' ? (
+              <div className="banner__actions">
+                <button type="button" className="btn btn--primary btn--sm" onClick={takeOlder}>
+                  <IconDownload size={16} />
+                  Stáhnout data starší záložky
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--outline btn--sm"
+                  onClick={removeOlder}
+                  disabled={olderTaken === null}
+                >
+                  Odstranit z prohlížeče
+                </button>
               </div>
             ) : null}
           </div>
