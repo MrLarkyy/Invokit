@@ -107,7 +107,7 @@ describe('cache names', () => {
       cacheName(invokit, 'abc'),
       cacheName(other, 'old'),
       'other',
-      'invoo.data.v2',
+      'invoo.data.v3',
     ];
     expect(staleCaches(keys, invokit, cacheName(invokit, 'abc'))).toEqual([cacheName(invokit, 'old')]);
   });

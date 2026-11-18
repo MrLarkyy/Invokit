@@ -38,7 +38,7 @@ stažení všech souborů a otevřená stránka se sama nepřepne.
 - Jestli je nová verze k dispozici, se zjišťuje při každém otevření stránky a při návratu na kartu, nejvýše jednou za
   hodinu.
 - Starší mezipaměti `invoo-*` téhož adresáře se po aktivaci smažou (název nese cestu aplikace, takže jiná kopie na
-  stejném původu zůstane); faktury v `localStorage` (`invoo.data.v2`) se tím nemění.
+  stejném původu zůstane); faktury v `localStorage` (`invoo.data.v3`) se tím nemění.
 
 ## Odstranění
 
